@@ -19,6 +19,16 @@ Added
 - Added material domain randomization functions for MuJoCo Warp RGB rendering:
   ``dr.mat_emission``, ``dr.mat_specular``, ``dr.mat_shininess``, and
   ``dr.mat_texrepeat``.
+- Added JLJBot asset zoo constants and velocity task configurations.
+- Added automatic simplified box collision generation for JLJBot collision
+  meshes.
+- Added a JLJBot-private reward module for robot-specific velocity reward terms.
+- Added a JLJBot hip-roll default-pose deviation penalty for discouraging
+  excessive lateral hip motion.
+- Added a JLJBot waist roll/pitch default-pose deviation penalty for discouraging
+  excessive torso bending.
+- Added a JLJBot hip-yaw default-pose deviation penalty and fixed the JLJBot
+  hip-pitch deviation reward wiring.
 
 Changed
 ^^^^^^^
