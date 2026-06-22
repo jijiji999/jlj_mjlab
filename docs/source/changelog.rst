@@ -34,6 +34,11 @@ Changed
 ^^^^^^^
 
 - Bumped ``rsl-rl-lib`` from 5.2.0 to 5.4.0.
+- JLJBot velocity policies now omit base linear velocity from actor observations
+  by default. The input remains configurable for comparison experiments, and
+  critic observations still include it.
+- Velocity play viewers now show the selected command and the robot's measured
+  ``vx/vy/wz`` values in the status overlay for faster training inspection.
 - Curriculum-mode terrain difficulty is now deterministic across rows
   and reaches the configured ``difficulty_range`` endpoints
   (:issue:`1027`).

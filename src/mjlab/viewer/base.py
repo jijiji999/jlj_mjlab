@@ -76,6 +76,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum, IntEnum
+from html import escape
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 import torch
@@ -127,6 +128,7 @@ class ViewerStatus:
   smoothed_fps: float
   capped: bool
   last_error: str | None
+  command_status: list[tuple[str, str]]
 
 
 class ViewerAction(Enum):
@@ -143,6 +145,53 @@ class ViewerAction(Enum):
   TOGGLE_SHOW_ALL_ENVS = "toggle_show_all_envs"
   FETCH_CHECKPOINT = "fetch_checkpoint"
   CUSTOM = "custom"
+
+
+def _status_rows(status: ViewerStatus, env_label: str) -> list[tuple[str, str]]:
+  rows = [
+    ("Env", env_label),
+    (
+      "Status",
+      f"{'Paused' if status.paused else 'Running'}"
+      f"{' [CAPPED]' if status.capped else ''}",
+    ),
+    ("Steps", str(status.step_count)),
+    ("Speed", status.speed_label),
+    ("Target RT", f"{status.target_realtime:.2f}x"),
+    (
+      "Actual RT",
+      f"{status.actual_realtime:.2f}x ({status.smoothed_fps:.0f} FPS)",
+    ),
+  ]
+  if status.last_error:
+    first_line = status.last_error.strip().splitlines()[-1]
+    rows.append(("Error", first_line))
+  rows.extend(status.command_status)
+  return rows
+
+
+def format_status_text(status: ViewerStatus, env_label: str) -> tuple[str, str]:
+  rows = _status_rows(status, env_label)
+  return (
+    "\n".join(name for name, _ in rows),
+    "\n".join(value for _, value in rows),
+  )
+
+
+def format_status_html(status: ViewerStatus, env_label: str) -> str:
+  rows = _status_rows(status, env_label)
+  table_rows = "".join(
+    f"<tr><td style='padding-right: 1em; white-space: nowrap;'>{name}</td>"
+    f"<td>{escape(value)}</td></tr>"
+    for name, value in rows
+  )
+  return f"""
+    <div style="font-size: 0.85em; line-height: 1.25; padding: 0 1em 0.5em 1em;">
+      <table style="width:100%; border-collapse:collapse;">
+        {table_rows}
+      </table>
+    </div>
+    """
 
 
 class BaseViewer(ABC):
@@ -471,7 +520,16 @@ class BaseViewer(ABC):
       return f"1/{inv_rounded}x"
     return f"{multiplier:.3g}x"
 
-  def get_status(self) -> ViewerStatus:
+  def get_status(self, env_idx: int | None = None) -> ViewerStatus:
+    if env_idx is None:
+      env_idx = self.cfg.env_idx
+    command_status: list[tuple[str, str]] = []
+    command_manager = getattr(self.env.unwrapped, "command_manager", None)
+    if command_manager is not None and hasattr(command_manager, "get_status_lines"):
+      try:
+        command_status = list(command_manager.get_status_lines(env_idx))
+      except Exception:
+        command_status = []
     return ViewerStatus(
       paused=self._is_paused,
       step_count=self._step_count,
@@ -482,4 +540,5 @@ class BaseViewer(ABC):
       smoothed_fps=self._fps,
       capped=self._was_capped,
       last_error=self._last_error,
+      command_status=command_status,
     )

@@ -5,6 +5,7 @@ import pytest
 from mjlab.asset_zoo.robots import G1_ACTION_SCALE, GO1_ACTION_SCALE
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.tasks.registry import list_tasks, load_env_cfg
+from mjlab.tasks.velocity.config.jljbot.env_cfgs import jljbot_flat_env_cfg
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 
 
@@ -197,3 +198,16 @@ def test_go1_velocity_has_correct_action_scale(
     assert joint_pos_action.scale == GO1_ACTION_SCALE, (
       f"Task {task_id} action scale mismatch, expected GO1_ACTION_SCALE"
     )
+
+
+def test_jljbot_actor_base_lin_vel_is_configurable() -> None:
+  """JLJBot can omit base linear velocity from actor observations."""
+  cfg = load_env_cfg("JLJBot-Velocity-Flat")
+
+  assert "base_lin_vel" not in cfg.observations["actor"].terms
+  assert "base_lin_vel" in cfg.observations["critic"].terms
+
+  cfg_with_lin_vel = jljbot_flat_env_cfg(include_actor_base_lin_vel=True)
+
+  assert "base_lin_vel" in cfg_with_lin_vel.observations["actor"].terms
+  assert "base_lin_vel" in cfg_with_lin_vel.observations["critic"].terms

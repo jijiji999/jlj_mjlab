@@ -25,9 +25,12 @@ from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from . import rewards as jljbot_rewards
 
 
-def jljbot_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+def jljbot_rough_env_cfg(
+  play: bool = False,
+  include_actor_base_lin_vel: bool = False,
+) -> ManagerBasedRlEnvCfg:
   """Create jljbot rough terrain velocity configuration."""
-  cfg = make_velocity_env_cfg()
+  cfg = make_velocity_env_cfg(include_actor_base_lin_vel=include_actor_base_lin_vel)
 
   cfg.sim.mujoco.ccd_iterations = 500
   cfg.sim.contact_sensor_maxmatch = 1024
@@ -210,9 +213,15 @@ def jljbot_rough_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   return cfg
 
 
-def jljbot_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+def jljbot_flat_env_cfg(
+  play: bool = False,
+  include_actor_base_lin_vel: bool = False,
+) -> ManagerBasedRlEnvCfg:
   """Create JLJBot flat terrain velocity configuration."""
-  cfg = jljbot_rough_env_cfg(play=play)
+  cfg = jljbot_rough_env_cfg(
+    play=play,
+    include_actor_base_lin_vel=include_actor_base_lin_vel,
+  )
 
   cfg.sim.njmax = 300
   cfg.sim.mujoco.ccd_iterations = 50

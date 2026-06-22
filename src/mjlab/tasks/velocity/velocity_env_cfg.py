@@ -36,7 +36,9 @@ from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
 
 
-def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
+def make_velocity_env_cfg(
+  include_actor_base_lin_vel: bool = True,
+) -> ManagerBasedRlEnvCfg:
   """Create base velocity tracking task configuration."""
 
   ##
@@ -73,12 +75,13 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
   # Observations
   ##
 
+  base_lin_vel_term = ObservationTermCfg(
+    func=mdp.builtin_sensor,
+    params={"sensor_name": "robot/imu_lin_vel"},
+    noise=Unoise(n_min=-0.5, n_max=0.5),
+  )
+
   actor_terms = {
-    "base_lin_vel": ObservationTermCfg(
-      func=mdp.builtin_sensor,
-      params={"sensor_name": "robot/imu_lin_vel"},
-      noise=Unoise(n_min=-0.5, n_max=0.5),
-    ),
     "base_ang_vel": ObservationTermCfg(
       func=mdp.builtin_sensor,
       params={"sensor_name": "robot/imu_ang_vel"},
@@ -108,9 +111,12 @@ def make_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
       scale=1 / terrain_scan.max_distance,
     ),
   }
+  if include_actor_base_lin_vel:
+    actor_terms = {"base_lin_vel": base_lin_vel_term, **actor_terms}
 
   critic_terms = {
     **actor_terms,
+    "base_lin_vel": base_lin_vel_term,
     "height_scan": ObservationTermCfg(
       func=envs_mdp.height_scan,
       params={"sensor_name": "terrain_scan"},

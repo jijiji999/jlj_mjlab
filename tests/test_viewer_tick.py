@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from mjlab.viewer.base import BaseViewer
+from mjlab.viewer.base import BaseViewer, format_status_text
 
 
 class FakeViewer(BaseViewer):
@@ -14,7 +15,9 @@ class FakeViewer(BaseViewer):
   def __init__(self, step_dt: float = 0.01, frame_rate: float = 60.0):
     env = MagicMock()
     env.unwrapped.step_dt = step_dt
+    env.unwrapped.command_manager = None
     env.cfg.viewer = MagicMock()
+    env.cfg.viewer.env_idx = 0
     super().__init__(env, MagicMock(return_value=MagicMock()), frame_rate=frame_rate)
     self.sim_step_count = 0
     self.render_count = 0
@@ -219,6 +222,33 @@ def test_status_snapshot():
   assert abs(status.actual_realtime - 0.5) < 1e-10
   assert status.speed_label == "1x"
   assert status.last_error == "err"
+  assert status.command_status == []
+
+
+def test_status_includes_command_summary():
+  v = FakeViewer(step_dt=0.01)
+  v.env.unwrapped.command_manager = SimpleNamespace(
+    get_status_lines=lambda env_idx: [
+      (
+        "twist",
+        "Cmd vx=+0.50, vy=-0.10, wz=+0.20",
+      ),
+      (
+        "twist",
+        "Act vx=+0.45, vy=-0.05, wz=+0.18",
+      ),
+    ]
+  )
+
+  status = v.get_status(2)
+  assert status.command_status == [
+    ("twist", "Cmd vx=+0.50, vy=-0.10, wz=+0.20"),
+    ("twist", "Act vx=+0.45, vy=-0.05, wz=+0.18"),
+  ]
+
+  text_1, text_2 = format_status_text(status, "3/8")
+  assert "twist" in text_1
+  assert "vx=+0.50" in text_2
 
 
 def test_capped_clears_each_tick():

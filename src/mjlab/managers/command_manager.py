@@ -81,6 +81,11 @@ class CommandTerm(ManagerTermBase):
     ``"twist"``).
     """
 
+  def status_lines(self, env_idx: int) -> list[tuple[str, str]]:
+    """Return human-readable status lines for the selected environment."""
+    del env_idx  # Unused.
+    return []
+
   def on_viewer_pause(self, paused: bool) -> None:
     """Called when the viewer pause state changes."""
 
@@ -238,6 +243,14 @@ class CommandManager(ManagerBase):
       idx += term.command.shape[1]
     return terms
 
+  def get_status_lines(self, env_idx: int) -> list[tuple[str, str]]:
+    """Return human-readable status lines for the selected environment."""
+    lines: list[tuple[str, str]] = []
+    for term_name, term in self._terms.items():
+      for label, value in term.status_lines(env_idx):
+        lines.append((f"{term_name} {label}", value))
+    return lines
+
   def reset(self, env_ids: torch.Tensor | None) -> dict[str, torch.Tensor]:
     extras = {}
     for name, term in self._terms.items():
@@ -315,6 +328,10 @@ class NullCommandManager:
   def get_active_iterable_terms(
     self, env_idx: int
   ) -> Sequence[tuple[str, Sequence[float]]]:
+    return []
+
+  def get_status_lines(self, env_idx: int) -> list[tuple[str, str]]:
+    del env_idx
     return []
 
   def reset(self, env_ids: torch.Tensor | None = None) -> dict[str, torch.Tensor]:

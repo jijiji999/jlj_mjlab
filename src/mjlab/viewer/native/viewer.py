@@ -58,6 +58,7 @@ from mjlab.viewer.base import (
   PolicyProtocol,
   VerbosityLevel,
   ViewerAction,
+  format_status_text,
 )
 from mjlab.viewer.model_sync import (
   VIEWER_INERTIAL_FIELDS,
@@ -243,16 +244,9 @@ class NativeMujocoViewer(BaseViewer):
       v.sync(state_only=not has_visual_dr)
 
   def _set_status_overlay(self, viewer: mujoco.viewer.Handle) -> None:
-    status = self.get_status()
-    capped = " [CAPPED]" if status.capped else ""
-    text_1 = "Env\nStep\nStatus\nSpeed\nTarget RT\nActual RT"
-    text_2 = (
-      f"{self.env_idx + 1}/{self.env.num_envs}\n"
-      f"{status.step_count}\n"
-      f"{'PAUSED' if status.paused else 'RUNNING'}{capped}\n"
-      f"{status.speed_label}\n"
-      f"{status.target_realtime:.2f}x\n"
-      f"{status.actual_realtime:.2f}x ({status.smoothed_fps:.0f} FPS)"
+    status = self.get_status(self.env_idx)
+    text_1, text_2 = format_status_text(
+      status, f"{self.env_idx + 1}/{self.env.num_envs}"
     )
     overlay = (
       mujoco.mjtFontScale.mjFONTSCALE_150.value,

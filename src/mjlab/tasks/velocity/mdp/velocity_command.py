@@ -58,6 +58,23 @@ class UniformVelocityCommand(CommandTerm):
   def command(self) -> torch.Tensor:
     return self.vel_command_b
 
+  def status_lines(self, env_idx: int) -> list[tuple[str, str]]:
+    cmd = self.vel_command_b[env_idx]
+    actual_lin = self.robot.data.root_link_lin_vel_b[env_idx]
+    actual_ang = self.robot.data.root_link_ang_vel_b[env_idx]
+    return [
+      ("Cmd", _format_triplet(cmd[0], cmd[1], cmd[2])),
+      ("Act", _format_triplet(actual_lin[0], actual_lin[1], actual_ang[2])),
+      (
+        "Err",
+        _format_triplet(
+          cmd[0] - actual_lin[0],
+          cmd[1] - actual_lin[1],
+          cmd[2] - actual_ang[2],
+        ),
+      ),
+    ]
+
   def _update_metrics(self) -> None:
     max_command_time = self.cfg.resampling_time_range[1]
     max_command_step = max_command_time / self._env.step_dt
@@ -275,6 +292,18 @@ class UniformVelocityCommand(CommandTerm):
       visualizer.add_arrow(
         act_ang_from, act_ang_to, color=(0.0, 1.0, 0.4, 0.7), width=0.015
       )
+
+
+def _format_triplet(
+  vx: torch.Tensor | float, vy: torch.Tensor | float, wz: torch.Tensor | float
+) -> str:
+  values = [vx, vy, wz]
+  out: list[str] = []
+  for name, value in zip(("vx", "vy", "wz"), values, strict=True):
+    if isinstance(value, torch.Tensor):
+      value = float(value.detach().cpu().item())
+    out.append(f"{name}={value:+.2f}")
+  return ", ".join(out)
 
 
 @dataclass(kw_only=True)
