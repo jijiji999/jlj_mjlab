@@ -118,3 +118,43 @@ def test_waist_roll_pitch_initial_deviation_l2_penalizes_default_pose_error() ->
   env = cast(Any, SimpleNamespace(scene={"robot": FakeRobot()}))
   reward = jljbot_rewards.waist_roll_pitch_initial_deviation_l2(env, std=0.2)
   torch.testing.assert_close(reward, torch.tensor([1.25, 6.25]))
+
+
+def test_arm_initial_deviation_l2_penalizes_default_pose_error() -> None:
+  class FakeRobot:
+    data = SimpleNamespace(
+      joint_pos=torch.tensor(
+        [
+          [0.30, -0.10, 0.20, -0.50, 0.40],
+          [0.10, -0.20, 0.40, -0.10, 0.00],
+        ]
+      ),
+      default_joint_pos=torch.tensor(
+        [
+          [0.20, -0.20, 0.10, -0.40, 0.20],
+          [0.00, -0.20, 0.10, -0.30, 0.10],
+        ]
+      ),
+    )
+
+    def find_joints(self, joint_names):
+      assert joint_names == (
+        ".*_shoulder_pitch_joint",
+        ".*_shoulder_roll_joint",
+        ".*_shoulder_yaw_joint",
+        ".*_elbow_joint",
+        ".*_wrist_roll_joint",
+        ".*_wrist_pitch_joint",
+        ".*_wrist_yaw_joint",
+      )
+      return [0, 1, 2, 3, 4], [
+        "left_shoulder_pitch_joint",
+        "right_shoulder_roll_joint",
+        "left_shoulder_yaw_joint",
+        "right_elbow_joint",
+        "left_wrist_roll_joint",
+      ]
+
+  env = cast(Any, SimpleNamespace(scene={"robot": FakeRobot()}))
+  reward = jljbot_rewards.arm_initial_deviation_l2(env, std=0.2)
+  torch.testing.assert_close(reward, torch.tensor([2.0, 3.75]))

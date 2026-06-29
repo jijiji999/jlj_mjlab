@@ -14,6 +14,7 @@ import tyro
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.scripts._cli import maybe_print_top_level_help
+from mjlab.scripts.play_trace import PlayTraceEnvWrapper, default_play_trace_path
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
 from mjlab.utils.os import get_wandb_checkpoint_path
@@ -51,6 +52,16 @@ class PlayConfig:
   """Disable all termination conditions (useful for viewing motions with dummy agents)."""
   log_root: str = "logs/rsl_rl"
   """Root directory under which experiment logs are written."""
+  trace: bool = False
+  """Record per-step policy inputs, policy outputs, and robot actuator state."""
+  trace_path: str | None = None
+  """Optional JSONL output path for ``--trace``. Defaults under the play log dir."""
+  trace_env_ids: tuple[int, ...] = (0,)
+  """Environment ids to record when ``--trace`` is enabled."""
+  trace_interval: int = 1
+  """Record every N policy steps when ``--trace`` is enabled."""
+  trace_entity: str = "robot"
+  """Scene entity name whose joint and actuator state is recorded."""
 
   # Internal flag used by demo script.
   _demo_mode: tyro.conf.Suppress[bool] = False
@@ -287,14 +298,32 @@ def run_play(task_id: str, cfg: PlayConfig):
   else:
     resolved_viewer = cfg.viewer
 
-  if resolved_viewer == "native":
-    NativeMujocoViewer(env, policy).run()
-  elif resolved_viewer == "viser":
-    ViserPlayViewer(env, policy, checkpoint_manager=ckpt_manager).run()
-  else:
-    raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
+  play_env = env
+  if cfg.trace:
+    trace_path = (
+      Path(cfg.trace_path).expanduser()
+      if cfg.trace_path is not None
+      else default_play_trace_path(task_id, log_dir=log_dir, log_root=cfg.log_root)
+    )
+    play_env = PlayTraceEnvWrapper(
+      env,
+      path=trace_path,
+      task_id=task_id,
+      entity_name=cfg.trace_entity,
+      env_ids=cfg.trace_env_ids,
+      interval=cfg.trace_interval,
+    )
+    print(f"[INFO] Recording play trace to: {trace_path}")
 
-  env.close()
+  try:
+    if resolved_viewer == "native":
+      NativeMujocoViewer(play_env, policy).run()
+    elif resolved_viewer == "viser":
+      ViserPlayViewer(play_env, policy, checkpoint_manager=ckpt_manager).run()
+    else:
+      raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
+  finally:
+    play_env.close()
 
 
 def main():

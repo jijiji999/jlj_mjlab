@@ -53,69 +53,89 @@ def get_spec() -> mujoco.MjSpec:
 ##
 
 JLJBOT_ARMATURE = 0.01
+JLJBOT_DELAY_MIN_LAG = 0
+JLJBOT_DELAY_MAX_LAG = 2
 
 JLJBOT_ACTUATOR_HIP_PITCH = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_hip_pitch_.*",),
-  stiffness=65,
+  stiffness=200,  # 65
   damping=5.0,
   effort_limit=200.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.055,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_HIP_ROLL_KNEE = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_hip_roll_.*", ".*_knee_.*"),
-  stiffness=70,
+  stiffness=200,  # 70
   damping=5,
   effort_limit=200.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.055,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_HIP_YAW_WAIST_YAW = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_hip_yaw_.*", "waist_yaw_joint"),
-  stiffness=50,
+  stiffness=200,  # 50
   damping=5,
   effort_limit=200.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.055,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_WAIST_ROLL_PITCH = BuiltinPositionActuatorCfg(
   target_names_expr=("waist_roll_joint", "waist_pitch_joint"),
-  stiffness=50.0,
-  damping=3.7,
+  stiffness=60,  # 50
+  damping=4,  # 3.7
   effort_limit=54.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.016,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_SHOULDER_PITCH = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_shoulder_pitch_.*",),
-  stiffness=35.0,
-  damping=3.7,
+  stiffness=120,  # 35
+  damping=5,  # 3.7
   effort_limit=54.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.016,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_SHOULDER_ROLL = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_shoulder_roll_.*",),
-  stiffness=27.0,
-  damping=3.7,
+  stiffness=120,  # 27
+  damping=5,  # 3.7
   effort_limit=54.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.016,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_SHOULDER_YAW_ANKLE = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_shoulder_yaw_.*", ".*_ankle_.*"),
-  stiffness=20,
-  damping=1.5,
+  stiffness=120,  # 20
+  damping=5,  # 1.5
   effort_limit=28.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.032,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_ELBOW = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_elbow_.*",),
-  stiffness=20.0,
-  damping=2.0,
+  stiffness=120.0,  # 20
+  damping=5,  # 2
   effort_limit=28.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.032,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 JLJBOT_ACTUATOR_WRIST = BuiltinPositionActuatorCfg(
   target_names_expr=(".*_wrist.*",),
-  stiffness=10.0,
-  damping=1.0,
+  stiffness=7.1,  # 10
+  damping=0.45,  # 1
   effort_limit=10.0,
-  armature=JLJBOT_ARMATURE,
+  armature=0.0018,
+  delay_min_lag=JLJBOT_DELAY_MIN_LAG,
+  delay_max_lag=JLJBOT_DELAY_MAX_LAG,
 )
 
 ##

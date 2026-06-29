@@ -71,15 +71,15 @@
       <geom name="base_link_collision" pos="0 0 0" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="mesh" mesh="base_link" />
       <site name="imu_in_base_link" size="0.01" pos="-0.01 0 -0.09" group="5" rgba="1 0 0 1" />
       <body name="waist_yaw_link" pos="0 0 0.007">
-        <joint name="waist_yaw_joint" type="hinge" axis="0 0 1" limited="true" range="-1.57 1.57" damping="0" frictionloss="0"/>
+        <joint name="waist_yaw_joint" type="hinge" axis="0 0 1" limited="true" range="-0.7 0.7" damping="0" frictionloss="0"/>
         <inertial pos="-0.0259888 0 0.0360763" mass="0.9641464" fullinertia="0.0005716 0.0006786 0.001122 0 0.0000066 0"/>
         <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="waist_yaw_link_mat" type="mesh" mesh="waist_yaw_link" />
         <body name="waist_roll_link" pos="-0.027 0 0.062">
-          <joint name="waist_roll_joint" type="hinge" axis="1 0 0" limited="true" range="-0.5 0.5" damping="0" frictionloss="0"/>
+          <joint name="waist_roll_joint" type="hinge" axis="1 0 0" limited="true" range="-0.2 0.2" damping="0" frictionloss="0"/>
           <inertial pos="0.0269999 0 -0.0000001" mass="0.0365367" diaginertia="0.0000058 0.0000043 0.0000088"/>
           <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="waist_roll_link_mat" type="mesh" mesh="waist_roll_link" />
           <body name="waist_pitch_link" pos="0.027 0 0.008">
-            <joint name="waist_pitch_joint" type="hinge" axis="0 -1 0" limited="true" range="-0.5 0.5" damping="0" frictionloss="0"/>
+            <joint name="waist_pitch_joint" type="hinge" axis="0 -1 0" limited="true" range="-0.43 0.19" damping="0" frictionloss="0"/>
             <inertial pos="-0.0000882 -0.0012021 0.2397531" mass="16.616511" fullinertia="0.049348 0.0333801 0.0388607 0.000152 0.0001588 0.0000426"/>
             <geom pos="0 0 0" group="1" contype="0" conaffinity="0" material="waist_pitch_link_mat" type="mesh" mesh="waist_pitch_link" />
             <geom name="waist_pitch_link_collision" pos="0 0 0.2" rgba="0.9373 0.2667 0.2667 1" group="3" contype="1" conaffinity="1" type="box" size="0.07 0.1 0.2" />

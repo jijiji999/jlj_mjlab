@@ -1,11 +1,21 @@
 """Tests specific to velocity tasks."""
 
+import math
+
 import pytest
 
-from mjlab.asset_zoo.robots import G1_ACTION_SCALE, GO1_ACTION_SCALE
+from mjlab.asset_zoo.robots import (
+  G1_ACTION_SCALE,
+  GO1_ACTION_SCALE,
+  JLJBOT_ACTION_SCALE,
+)
+from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.tasks.registry import list_tasks, load_env_cfg
-from mjlab.tasks.velocity.config.jljbot.env_cfgs import jljbot_flat_env_cfg
+from mjlab.tasks.velocity.config.jljbot.env_cfgs import (
+  JLJBOT_FIXED_ACTION_SCALE,
+  jljbot_flat_env_cfg,
+)
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 
 
@@ -200,6 +210,28 @@ def test_go1_velocity_has_correct_action_scale(
     )
 
 
+def test_jljbot_velocity_uses_fixed_action_scale_by_default() -> None:
+  """JLJBot velocity tasks should default to a fixed 0.5 action scale."""
+  cfg = load_env_cfg("JLJBot-Velocity-Flat")
+
+  assert "joint_pos" in cfg.actions
+
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  assert joint_pos_action.scale == JLJBOT_FIXED_ACTION_SCALE
+
+
+def test_jljbot_velocity_can_use_robot_adaptive_action_scale() -> None:
+  """JLJBot can switch back to the original per-joint action scales."""
+  cfg = jljbot_flat_env_cfg(use_fixed_action_scale=False)
+
+  assert "joint_pos" in cfg.actions
+
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  assert joint_pos_action.scale == JLJBOT_ACTION_SCALE
+
+
 def test_jljbot_actor_base_lin_vel_is_configurable() -> None:
   """JLJBot can omit base linear velocity from actor observations."""
   cfg = load_env_cfg("JLJBot-Velocity-Flat")
@@ -211,3 +243,32 @@ def test_jljbot_actor_base_lin_vel_is_configurable() -> None:
 
   assert "base_lin_vel" in cfg_with_lin_vel.observations["actor"].terms
   assert "base_lin_vel" in cfg_with_lin_vel.observations["critic"].terms
+
+
+def test_jljbot_velocity_randomizes_link_pseudo_inertia() -> None:
+  """JLJBot velocity tasks should randomize link mass and inertia consistently."""
+  cfg = load_env_cfg("JLJBot-Velocity-Flat")
+
+  event_names = list(cfg.events)
+  assert "link_pseudo_inertia" in cfg.events
+  assert event_names.index("link_pseudo_inertia") < event_names.index("base_com")
+
+  event = cfg.events["link_pseudo_inertia"]
+  assert event.mode == "startup"
+  assert event.func is dr.pseudo_inertia
+  assert event.params["asset_cfg"].body_names == (".*",)
+  assert event.params["alpha_range"] == pytest.approx(
+    (0.5 * math.log(0.8), 0.5 * math.log(1.2))
+  )
+
+
+def test_jljbot_velocity_has_arm_deviation_reward() -> None:
+  """JLJBot velocity tasks should include the private arm-deviation reward."""
+  cfg = load_env_cfg("JLJBot-Velocity-Flat")
+
+  assert "arm_deviation" in cfg.rewards
+
+  reward = cfg.rewards["arm_deviation"]
+  assert reward.func.__name__ == "arm_initial_deviation_l2"
+  assert reward.weight == pytest.approx(-0.05)
+  assert reward.params["std"] == pytest.approx(0.35)

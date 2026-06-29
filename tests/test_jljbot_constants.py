@@ -51,6 +51,24 @@ def test_actuator_parameters(jljbot_model, actuator_config) -> None:
       assert actuator.forcerange[1] == actuator_config.effort_limit
 
 
+def test_jljbot_actuators_have_uniform_small_command_delay() -> None:
+  actuator_cfgs = (
+    jljbot_constants.JLJBOT_ACTUATOR_HIP_PITCH,
+    jljbot_constants.JLJBOT_ACTUATOR_HIP_ROLL_KNEE,
+    jljbot_constants.JLJBOT_ACTUATOR_HIP_YAW_WAIST_YAW,
+    jljbot_constants.JLJBOT_ACTUATOR_WAIST_ROLL_PITCH,
+    jljbot_constants.JLJBOT_ACTUATOR_SHOULDER_PITCH,
+    jljbot_constants.JLJBOT_ACTUATOR_SHOULDER_ROLL,
+    jljbot_constants.JLJBOT_ACTUATOR_SHOULDER_YAW_ANKLE,
+    jljbot_constants.JLJBOT_ACTUATOR_ELBOW,
+    jljbot_constants.JLJBOT_ACTUATOR_WRIST,
+  )
+
+  for actuator_cfg in actuator_cfgs:
+    assert actuator_cfg.delay_min_lag == jljbot_constants.JLJBOT_DELAY_MIN_LAG
+    assert actuator_cfg.delay_max_lag == jljbot_constants.JLJBOT_DELAY_MAX_LAG
+
+
 def test_keyframe_base_position(jljbot_model) -> None:
   data = mujoco.MjData(jljbot_model)
   mujoco.mj_resetDataKeyframe(jljbot_model, data, 0)

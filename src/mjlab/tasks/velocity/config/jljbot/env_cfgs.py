@@ -1,5 +1,7 @@
 """JLJBot velocity environment configurations."""
 
+import math
+
 from mjlab.asset_zoo.robots import (
   JLJBOT_ACTION_SCALE,
   JLJBOT_FOOT_COLLISION_NAMES,
@@ -7,9 +9,11 @@ from mjlab.asset_zoo.robots import (
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs import mdp as envs_mdp
+from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
+from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import (
   ContactMatch,
   ContactSensorCfg,
@@ -24,10 +28,27 @@ from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 
 from . import rewards as jljbot_rewards
 
+_LINK_MASS_SCALE_RANGE = (0.8, 1.2)
+_LINK_MASS_ALPHA_RANGE = (
+  0.5 * math.log(_LINK_MASS_SCALE_RANGE[0]),
+  0.5 * math.log(_LINK_MASS_SCALE_RANGE[1]),
+)
+JLJBOT_FIXED_ACTION_SCALE = 0.5
+
+
+def _get_jljbot_action_scale(
+  use_fixed_action_scale: bool,
+) -> float | dict[str, float]:
+  """Return the JLJBot action scale configuration."""
+  if use_fixed_action_scale:
+    return JLJBOT_FIXED_ACTION_SCALE
+  return JLJBOT_ACTION_SCALE
+
 
 def jljbot_rough_env_cfg(
   play: bool = False,
   include_actor_base_lin_vel: bool = False,
+  use_fixed_action_scale: bool = True,
 ) -> ManagerBasedRlEnvCfg:
   """Create jljbot rough terrain velocity configuration."""
   cfg = make_velocity_env_cfg(include_actor_base_lin_vel=include_actor_base_lin_vel)
@@ -87,7 +108,7 @@ def jljbot_rough_env_cfg(
 
   joint_pos_action = cfg.actions["joint_pos"]
   assert isinstance(joint_pos_action, JointPositionActionCfg)
-  joint_pos_action.scale = JLJBOT_ACTION_SCALE
+  joint_pos_action.scale = _get_jljbot_action_scale(use_fixed_action_scale)
 
   cfg.viewer.body_name = "base_link"
 
@@ -99,6 +120,17 @@ def jljbot_rough_env_cfg(
     "asset_cfg"
   ].geom_names = JLJBOT_FOOT_COLLISION_NAMES
   cfg.events["base_com"].params["asset_cfg"].body_names = ("base_link",)
+  base_com_event = cfg.events.pop("base_com")
+  cfg.events["link_pseudo_inertia"] = EventTermCfg(
+    mode="startup",
+    func=dr.pseudo_inertia,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", body_names=(".*",)),
+      # dr.pseudo_inertia scales mass and inertia by exp(2 * alpha).
+      "alpha_range": _LINK_MASS_ALPHA_RANGE,
+    },
+  )
+  cfg.events["base_com"] = base_com_event
 
   # Rationale for std values:
   # - Knees/hip_pitch get the loosest std to allow natural leg bending during stride.
@@ -188,6 +220,12 @@ def jljbot_rough_env_cfg(
     params={"std": 0.2},
   )
 
+  cfg.rewards["arm_deviation"] = RewardTermCfg(
+    func=jljbot_rewards.arm_initial_deviation_l2,
+    weight=-0.05,
+    params={"std": 0.35},
+  )
+
   # Apply play mode overrides.
   if play:
     # Effectively infinite episode length.
@@ -216,11 +254,13 @@ def jljbot_rough_env_cfg(
 def jljbot_flat_env_cfg(
   play: bool = False,
   include_actor_base_lin_vel: bool = False,
+  use_fixed_action_scale: bool = True,
 ) -> ManagerBasedRlEnvCfg:
   """Create JLJBot flat terrain velocity configuration."""
   cfg = jljbot_rough_env_cfg(
     play=play,
     include_actor_base_lin_vel=include_actor_base_lin_vel,
+    use_fixed_action_scale=use_fixed_action_scale,
   )
 
   cfg.sim.njmax = 300

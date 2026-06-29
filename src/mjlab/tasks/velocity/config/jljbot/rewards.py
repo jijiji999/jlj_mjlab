@@ -153,3 +153,34 @@ def waist_roll_pitch_initial_deviation_l2(
     joint_names=("waist_roll_joint", "waist_pitch_joint"),
     asset_cfg=asset_cfg,
   )
+
+
+def arm_initial_deviation_l2(
+  env: ManagerBasedRlEnv,
+  std: float,
+  asset_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+  """Quadratic penalty on both arms deviating from their initial joint angles.
+
+  The return value is a positive cost:
+
+  ``sum(((q_arm - q_init_arm) / std) ** 2)`` across both shoulders, elbows,
+  and wrists.
+
+  Use a negative reward weight in ``RewardTermCfg`` to keep the arms closer to
+  the nominal pose while still allowing moderate swing during locomotion.
+  """
+  return _joint_initial_deviation_l2(
+    env,
+    std=std,
+    joint_names=(
+      ".*_shoulder_pitch_joint",
+      ".*_shoulder_roll_joint",
+      ".*_shoulder_yaw_joint",
+      ".*_elbow_joint",
+      ".*_wrist_roll_joint",
+      ".*_wrist_pitch_joint",
+      ".*_wrist_yaw_joint",
+    ),
+    asset_cfg=asset_cfg,
+  )

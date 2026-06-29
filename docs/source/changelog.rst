@@ -29,6 +29,14 @@ Added
   excessive torso bending.
 - Added a JLJBot hip-yaw default-pose deviation penalty and fixed the JLJBot
   hip-pitch deviation reward wiring.
+- Added a JLJBot arm default-pose deviation penalty for constraining bilateral
+  arm motion during velocity training.
+- Added a small uniform command-delay randomization to all JLJBot joint
+  actuator groups to model policy-to-motor latency during velocity training.
+- Added optional ``play --trace`` logging for recording policy inputs, policy
+  outputs, and per-joint / actuator state during playback.
+- Added JLJBot velocity link pseudo-inertia randomization to scale link mass and
+  inertia consistently during startup domain randomization.
 
 Changed
 ^^^^^^^
@@ -37,6 +45,9 @@ Changed
 - JLJBot velocity policies now omit base linear velocity from actor observations
   by default. The input remains configurable for comparison experiments, and
   critic observations still include it.
+- JLJBot velocity tasks now default to a fixed ``0.5`` joint-position action
+  scale, with a ``use_fixed_action_scale`` toggle to restore the original
+  per-joint adaptive scale when needed.
 - Velocity play viewers now show the selected command and the robot's measured
   ``vx/vy/wz`` values in the status overlay for faster training inspection.
 - Curriculum-mode terrain difficulty is now deterministic across rows

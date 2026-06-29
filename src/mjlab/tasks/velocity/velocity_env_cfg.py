@@ -89,7 +89,7 @@ def make_velocity_env_cfg(
     ),
     "projected_gravity": ObservationTermCfg(
       func=mdp.projected_gravity,
-      noise=Unoise(n_min=-0.05, n_max=0.05),
+      noise=Unoise(n_min=-0.08, n_max=0.08),
     ),
     "joint_pos": ObservationTermCfg(
       func=mdp.joint_pos_rel,
@@ -221,8 +221,8 @@ def make_velocity_env_cfg(
       func=mdp.reset_joints_by_offset,
       mode="reset",
       params={
-        "position_range": (0.0, 0.0),
-        "velocity_range": (0.0, 0.0),
+        "position_range": (-0.05, 0.05),
+        "velocity_range": (-0.02, 0.02),
         "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
       },
     ),
@@ -247,7 +247,7 @@ def make_velocity_env_cfg(
       params={
         "asset_cfg": SceneEntityCfg("robot", geom_names=()),  # Set per-robot.
         "operation": "abs",
-        "ranges": (0.3, 1.2),
+        "ranges": (0.2, 1.3),
         "shared_random": True,  # All foot geoms share the same friction.
       },
     ),
@@ -256,7 +256,7 @@ def make_velocity_env_cfg(
       func=dr.encoder_bias,
       params={
         "asset_cfg": SceneEntityCfg("robot"),
-        "bias_range": (-0.015, 0.015),
+        "bias_range": (-0.02, 0.02),
       },
     ),
     "base_com": EventTermCfg(
@@ -266,8 +266,8 @@ def make_velocity_env_cfg(
         "asset_cfg": SceneEntityCfg("robot", body_names=()),  # Set per-robot.
         "operation": "add",
         "ranges": {
-          0: (-0.025, 0.025),
-          1: (-0.025, 0.025),
+          0: (-0.03, 0.03),
+          1: (-0.03, 0.03),
           2: (-0.03, 0.03),
         },
       },
@@ -449,11 +449,11 @@ def make_velocity_env_cfg(
       nconmax=35,
       njmax=1500,
       mujoco=MujocoCfg(
-        timestep=0.005,
+        timestep=0.002,
         iterations=10,
         ls_iterations=20,
       ),
     ),
-    decimation=4,
+    decimation=10,
     episode_length_s=20.0,
   )
