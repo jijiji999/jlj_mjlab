@@ -34,6 +34,7 @@ _LINK_MASS_ALPHA_RANGE = (
   0.5 * math.log(_LINK_MASS_SCALE_RANGE[1]),
 )
 JLJBOT_FIXED_ACTION_SCALE = 0.5
+JLJBOT_AIR_TIME_COMMAND_THRESHOLD = 0.2
 
 
 def _get_jljbot_action_scale(
@@ -189,6 +190,9 @@ def jljbot_rough_env_cfg(
   cfg.rewards["body_ang_vel"].weight = -0.05
   cfg.rewards["angular_momentum"].weight = -0.02
   cfg.rewards["air_time"].weight = 0.05
+  cfg.rewards["air_time"].params["command_threshold"] = (
+    JLJBOT_AIR_TIME_COMMAND_THRESHOLD
+  )
 
   cfg.rewards["self_collisions"] = RewardTermCfg(
     func=mdp.self_collision_cost,

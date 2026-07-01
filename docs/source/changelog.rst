@@ -37,6 +37,9 @@ Added
   outputs, and per-joint / actuator state during playback.
 - Added JLJBot velocity link pseudo-inertia randomization to scale link mass and
   inertia consistently during startup domain randomization.
+- Added optional ``play --report`` output for velocity tasks, saving summary
+  metrics and PNG plots such as command-vs-actual velocity tracking error,
+  base attitude, reward trend, and action smoothness during playback.
 
 Changed
 ^^^^^^^

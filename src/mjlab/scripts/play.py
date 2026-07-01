@@ -14,6 +14,10 @@ import tyro
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.scripts._cli import maybe_print_top_level_help
+from mjlab.scripts.play_report import (
+  PlayReportEnvWrapper,
+  default_play_report_dir,
+)
 from mjlab.scripts.play_trace import PlayTraceEnvWrapper, default_play_trace_path
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
@@ -62,6 +66,18 @@ class PlayConfig:
   """Record every N policy steps when ``--trace`` is enabled."""
   trace_entity: str = "robot"
   """Scene entity name whose joint and actuator state is recorded."""
+  report: bool = False
+  """Generate a play-time evaluation report with plots and summary metrics."""
+  report_dir: str | None = None
+  """Optional output directory for ``--report``. Defaults under the play log dir."""
+  report_env_id: int = 0
+  """Environment id to evaluate when ``--report`` is enabled."""
+  report_interval: int = 1
+  """Record every N policy steps when ``--report`` is enabled."""
+  report_entity: str = "robot"
+  """Scene entity name to evaluate when ``--report`` is enabled."""
+  report_command_name: str = "twist"
+  """Command term name to compare against robot motion in the report."""
 
   # Internal flag used by demo script.
   _demo_mode: tyro.conf.Suppress[bool] = False
@@ -314,6 +330,23 @@ def run_play(task_id: str, cfg: PlayConfig):
       interval=cfg.trace_interval,
     )
     print(f"[INFO] Recording play trace to: {trace_path}")
+
+  if cfg.report:
+    report_dir = (
+      Path(cfg.report_dir).expanduser()
+      if cfg.report_dir is not None
+      else default_play_report_dir(task_id, log_dir=log_dir, log_root=cfg.log_root)
+    )
+    play_env = PlayReportEnvWrapper(
+      play_env,
+      output_dir=report_dir,
+      task_id=task_id,
+      entity_name=cfg.report_entity,
+      command_name=cfg.report_command_name,
+      env_id=cfg.report_env_id,
+      interval=cfg.report_interval,
+    )
+    print(f"[INFO] Recording play report to: {report_dir}")
 
   try:
     if resolved_viewer == "native":
