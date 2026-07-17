@@ -34,7 +34,7 @@ from mjlab.terrains.config import flat, random_rough
 from mjlab.terrains.terrain_generator import TerrainGeneratorCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
-_LINK_MASS_SCALE_RANGE = (0.9, 1.2)
+_LINK_MASS_SCALE_RANGE = (0.9, 1.1)
 _LINK_MASS_ALPHA_RANGE = (
   0.5 * math.log(_LINK_MASS_SCALE_RANGE[0]),
   0.5 * math.log(_LINK_MASS_SCALE_RANGE[1]),
@@ -43,7 +43,7 @@ _LOWBODY_FOOT_SITE_NAMES = ("left_foot", "right_foot")
 
 JLJLOWBODY_FIXED_ACTION_SCALE = 0.5
 JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE = (0.8, 1.2)
-JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE = (0.8, 1.2)
+JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE = (0.9, 1.1)
 JLJLOWBODY_ACTION_ACC_WEIGHT = -0.02
 JLJLOWBODY_AIR_TIME_COMMAND_THRESHOLD = 0.2
 JLJLOWBODY_ACTOR_NOISE_RANGES: dict[str, tuple[float, float] | None] = {

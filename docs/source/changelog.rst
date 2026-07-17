@@ -64,6 +64,8 @@ Added
   task's training terrain configuration. The play-only random rough terrain uses
   a thicker heightfield base to avoid low-difficulty terrain tunneling artifacts
   during policy checks.
+- Added JLJLowBody tuning documentation covering PD randomization, action scale,
+  actuator delay, foot contact parameters, terrain setup, and related rewards.
 
 Changed
 ^^^^^^^

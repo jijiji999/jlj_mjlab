@@ -91,15 +91,15 @@ def _make_jljlowbody_actuator(
 
 JLJLOWBODY_ACTUATOR_LEFT_HIP_PITCH = _make_jljlowbody_actuator(
   "left_hip_pitch_joint",
-  stiffness=180.0,
-  damping=10.0,
+  stiffness=90.0,  # 180
+  damping=10.0,  # 10
   effort_limit=45.0,
   armature=0.055,
   velocity_limit=12.0,
 )
 JLJLOWBODY_ACTUATOR_LEFT_HIP_ROLL = _make_jljlowbody_actuator(
   "left_hip_roll_joint",
-  stiffness=80.0,
+  stiffness=50.0,  # 80
   damping=5.5,
   effort_limit=45.0,
   armature=0.055,
@@ -107,7 +107,7 @@ JLJLOWBODY_ACTUATOR_LEFT_HIP_ROLL = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_HIP_YAW = _make_jljlowbody_actuator(
   "left_hip_yaw_joint",
-  stiffness=140.0,
+  stiffness=70.0,  # 140
   damping=3.0,
   effort_limit=45.0,
   armature=0.055,
@@ -115,7 +115,7 @@ JLJLOWBODY_ACTUATOR_LEFT_HIP_YAW = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_KNEE = _make_jljlowbody_actuator(
   "left_knee_joint",
-  stiffness=300.0,
+  stiffness=150.0,  # 300
   damping=4.5,
   effort_limit=45.0,
   armature=0.055,
@@ -123,7 +123,7 @@ JLJLOWBODY_ACTUATOR_LEFT_KNEE = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_ANKLE_PITCH = _make_jljlowbody_actuator(
   "left_ankle_pitch_joint",
-  stiffness=150.0,  # 120
+  stiffness=75.0,  # 150
   damping=5.0,
   effort_limit=15.0,  # 12
   armature=0.064,  # 0.032
@@ -131,7 +131,7 @@ JLJLOWBODY_ACTUATOR_LEFT_ANKLE_PITCH = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_ANKLE_ROLL = _make_jljlowbody_actuator(
   "left_ankle_roll_joint",
-  stiffness=150.0,  # 120
+  stiffness=75.0,  # 150
   damping=5.0,
   effort_limit=15.0,  # 12
   armature=0.064,  # 0.032
@@ -139,7 +139,7 @@ JLJLOWBODY_ACTUATOR_LEFT_ANKLE_ROLL = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_HIP_PITCH = _make_jljlowbody_actuator(
   "right_hip_pitch_joint",
-  stiffness=180.0,
+  stiffness=90.0,  # 180
   damping=10.0,
   effort_limit=45.0,
   armature=0.055,
@@ -147,7 +147,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_HIP_PITCH = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_HIP_ROLL = _make_jljlowbody_actuator(
   "right_hip_roll_joint",
-  stiffness=80.0,
+  stiffness=50.0,  # 80
   damping=5.5,
   effort_limit=45.0,
   armature=0.055,
@@ -155,7 +155,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_HIP_ROLL = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_HIP_YAW = _make_jljlowbody_actuator(
   "right_hip_yaw_joint",
-  stiffness=140.0,
+  stiffness=70.0,  # 140
   damping=3.0,
   effort_limit=45.0,
   armature=0.055,
@@ -163,7 +163,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_HIP_YAW = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_KNEE = _make_jljlowbody_actuator(
   "right_knee_joint",
-  stiffness=300.0,
+  stiffness=150.0,  # 300
   damping=4.5,
   effort_limit=45.0,
   armature=0.055,
@@ -171,7 +171,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_KNEE = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_PITCH = _make_jljlowbody_actuator(
   "right_ankle_pitch_joint",
-  stiffness=150.0,  # 120
+  stiffness=75.0,  # 150
   damping=5.0,
   effort_limit=15.0,  # 12
   armature=0.064,  # 0.032
@@ -179,7 +179,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_PITCH = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_ROLL = _make_jljlowbody_actuator(
   "right_ankle_roll_joint",
-  stiffness=150.0,  # 120
+  stiffness=75.0,  # 150
   damping=5.0,
   effort_limit=15.0,  # 12
   armature=0.064,  # 0.032
@@ -329,14 +329,14 @@ def get_jljlowbody_capsule_robot_cfg(enable_actuator_delay: bool = True) -> Enti
 
 JLJLOWBODY_ACTION_SCALE: dict[str, float] = {
   "left_hip_pitch_joint": 0.0625,
-  "left_hip_roll_joint": 0.140625,
-  "left_hip_yaw_joint": 0.08035714285714286,
+  "left_hip_roll_joint": 0.14,
+  "left_hip_yaw_joint": 0.08,
   "left_knee_joint": 0.0375,
   "left_ankle_pitch_joint": 0.025,
   "left_ankle_roll_joint": 0.025,
   "right_hip_pitch_joint": 0.0625,
-  "right_hip_roll_joint": 0.140625,
-  "right_hip_yaw_joint": 0.08035714285714286,
+  "right_hip_roll_joint": 0.14,
+  "right_hip_yaw_joint": 0.08,
   "right_knee_joint": 0.0375,
   "right_ankle_pitch_joint": 0.025,
   "right_ankle_roll_joint": 0.025,
