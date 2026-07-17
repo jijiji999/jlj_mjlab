@@ -45,6 +45,7 @@ class UniformVelocityCommand(CommandTerm):
     self.is_standing_env = torch.zeros_like(self.is_heading_env)
     self.is_world_env = torch.zeros_like(self.is_heading_env)
     self.is_forward_env = torch.zeros_like(self.is_heading_env)
+    self.is_low_speed_env = torch.zeros_like(self.is_heading_env)
 
     self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
@@ -99,6 +100,7 @@ class UniformVelocityCommand(CommandTerm):
       self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
       self.is_heading_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_heading_envs
     self.is_standing_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_standing_envs
+    self.is_low_speed_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_low_speed_envs
 
     # Randomly assign world-frame envs.
     self.is_world_env[env_ids] = r.uniform_(0.0, 1.0) <= self.cfg.rel_world_envs
@@ -114,6 +116,29 @@ class UniformVelocityCommand(CommandTerm):
       )
       self.vel_command_b[fwd_ids, 1] = 0.0
       self.vel_command_b[fwd_ids, 2] = 0.0
+
+    low_speed_ids = env_ids[self.is_low_speed_env[env_ids]]
+    if len(low_speed_ids) > 0:
+      low_speed_rand = torch.empty(len(low_speed_ids), device=self.device)
+      self.vel_command_b[low_speed_ids, 0] = low_speed_rand.uniform_(
+        *self.cfg.low_speed_ranges.lin_vel_x
+      )
+      self.vel_command_b[low_speed_ids, 1] = low_speed_rand.uniform_(
+        *self.cfg.low_speed_ranges.lin_vel_y
+      )
+      self.vel_command_b[low_speed_ids, 2] = low_speed_rand.uniform_(
+        *self.cfg.low_speed_ranges.ang_vel_z
+      )
+      self.is_heading_env[low_speed_ids] = False
+      self.is_forward_env[low_speed_ids] = False
+      self.vel_command_w[low_speed_ids] = self.vel_command_b[low_speed_ids]
+
+    standing_ids = env_ids[self.is_standing_env[env_ids]]
+    self.is_low_speed_env[standing_ids] = False
+    self.is_heading_env[standing_ids] = False
+    self.is_forward_env[standing_ids] = False
+    self.vel_command_b[standing_ids, :] = 0.0
+    self.vel_command_w[standing_ids, :] = 0.0
 
     init_vel_mask = r.uniform_(0.0, 1.0) < self.cfg.init_velocity_prob
     init_vel_env_ids = env_ids[init_vel_mask]
@@ -312,6 +337,10 @@ class UniformVelocityCommandCfg(CommandTermCfg):
   heading_command: bool = False
   heading_control_stiffness: float = 1.0
   rel_standing_envs: float = 0.0
+  rel_low_speed_envs: float = 0.0
+  """Fraction of environments that receive near-zero velocity commands.
+  These commands are distinct from standing envs: the command is small but not
+  forced to exactly zero, which improves behavior around joystick deadbands."""
   rel_heading_envs: float = 1.0
   rel_world_envs: float = 0.0
   """Fraction of environments that use world-frame velocity commands.
@@ -331,6 +360,13 @@ class UniformVelocityCommandCfg(CommandTermCfg):
     heading: tuple[float, float] | None = None
 
   ranges: Ranges
+  low_speed_ranges: Ranges = field(
+    default_factory=lambda: UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(-0.05, 0.05),
+      lin_vel_y=(-0.05, 0.05),
+      ang_vel_z=(-0.05, 0.05),
+    )
+  )
 
   @dataclass
   class VizCfg:

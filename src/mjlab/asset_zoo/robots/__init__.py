@@ -13,6 +13,21 @@ from mjlab.asset_zoo.robots.jljbot.jljbot_constants import (
 from mjlab.asset_zoo.robots.jljbot.jljbot_constants import (
   get_jljbot_robot_cfg as get_jljbot_robot_cfg,
 )
+from mjlab.asset_zoo.robots.jljbot.jljlowbody_constants import (
+  JLJLOWBODY_ACTION_SCALE as JLJLOWBODY_ACTION_SCALE,
+)
+from mjlab.asset_zoo.robots.jljbot.jljlowbody_constants import (
+  JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES as JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES,
+)
+from mjlab.asset_zoo.robots.jljbot.jljlowbody_constants import (
+  JLJLOWBODY_FOOT_COLLISION_NAMES as JLJLOWBODY_FOOT_COLLISION_NAMES,
+)
+from mjlab.asset_zoo.robots.jljbot.jljlowbody_constants import (
+  get_jljlowbody_capsule_robot_cfg as get_jljlowbody_capsule_robot_cfg,
+)
+from mjlab.asset_zoo.robots.jljbot.jljlowbody_constants import (
+  get_jljlowbody_robot_cfg as get_jljlowbody_robot_cfg,
+)
 from mjlab.asset_zoo.robots.unitree_g1.g1_constants import (
   G1_ACTION_SCALE as G1_ACTION_SCALE,
 )

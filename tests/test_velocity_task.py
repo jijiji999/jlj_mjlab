@@ -1,22 +1,47 @@
 """Tests specific to velocity tasks."""
 
+import inspect
 import math
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
+import torch
 
 from mjlab.asset_zoo.robots import (
   G1_ACTION_SCALE,
   GO1_ACTION_SCALE,
   JLJBOT_ACTION_SCALE,
+  JLJLOWBODY_ACTION_SCALE,
+  JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES,
+  JLJLOWBODY_FOOT_COLLISION_NAMES,
 )
 from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.actions import JointPositionActionCfg
-from mjlab.tasks.registry import list_tasks, load_env_cfg
+from mjlab.managers.curriculum_manager import CurriculumTermCfg
+from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
+from mjlab.tasks.velocity import mdp as velocity_mdp
 from mjlab.tasks.velocity.config.jljbot.env_cfgs import (
   JLJBOT_FIXED_ACTION_SCALE,
   jljbot_flat_env_cfg,
 )
+from mjlab.tasks.velocity.config.jljlowbody import env_cfgs as jljlowbody_env_cfgs
+from mjlab.tasks.velocity.config.jljlowbody.env_cfgs import (
+  JLJLOWBODY_ACTION_ACC_WEIGHT,
+  JLJLOWBODY_ACTOR_NOISE_RANGES,
+  JLJLOWBODY_BLIND_ROUGH_NUM_ROWS,
+  JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE,
+  JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES,
+  JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES,
+  JLJLOWBODY_FIXED_ACTION_SCALE,
+  JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS,
+  JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE,
+  JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE,
+  JLJLOWBODY_STANDING_COMMAND_STAGES,
+  jljlowbody_flat_env_cfg,
+)
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
+from mjlab.utils.noise import UniformNoiseCfg
 
 
 @pytest.fixture(scope="module")
@@ -272,3 +297,334 @@ def test_jljbot_velocity_has_arm_deviation_reward() -> None:
   assert reward.func.__name__ == "arm_initial_deviation_l2"
   assert reward.weight == pytest.approx(-0.05)
   assert reward.params["std"] == pytest.approx(0.35)
+
+
+def test_jljlowbody_velocity_uses_fixed_action_scale_by_default() -> None:
+  """JLJLowBody velocity tasks should default to a fixed 0.5 action scale."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+
+  assert "joint_pos" in cfg.actions
+
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  assert joint_pos_action.scale == JLJLOWBODY_FIXED_ACTION_SCALE
+
+
+def test_jljlowbody_velocity_can_use_robot_adaptive_action_scale() -> None:
+  """JLJLowBody can switch to the per-joint adaptive action scales."""
+  cfg = jljlowbody_flat_env_cfg(use_fixed_action_scale=False)
+
+  assert "joint_pos" in cfg.actions
+
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  assert joint_pos_action.scale == JLJLOWBODY_ACTION_SCALE
+
+
+def test_jljlowbody_action_scale_is_independent_per_joint() -> None:
+  """JLJLowBody adaptive action scales should target exact joint names."""
+  assert len(JLJLOWBODY_ACTION_SCALE) == 12
+  assert all(".*" not in name for name in JLJLOWBODY_ACTION_SCALE)
+
+
+def test_jljlowbody_actor_base_lin_vel_is_configurable() -> None:
+  """JLJLowBody can omit base linear velocity from actor observations."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+
+  assert "base_lin_vel" not in cfg.observations["actor"].terms
+  assert "base_lin_vel" in cfg.observations["critic"].terms
+
+  cfg_with_lin_vel = jljlowbody_flat_env_cfg(include_actor_base_lin_vel=True)
+
+  assert "base_lin_vel" in cfg_with_lin_vel.observations["actor"].terms
+  assert "base_lin_vel" in cfg_with_lin_vel.observations["critic"].terms
+
+
+def test_jljlowbody_velocity_omits_jljbot_upper_body_rewards() -> None:
+  """JLJLowBody should not carry over arm or waist-only deviation rewards."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+
+  assert "arm_deviation" not in cfg.rewards
+  assert "waist_roll_pitch_deviation" not in cfg.rewards
+
+
+def test_jljlowbody_velocity_cfg_is_task_local() -> None:
+  """JLJLowBody should not delegate its config to JLJBot config factories."""
+  source = inspect.getsource(jljlowbody_env_cfgs)
+
+  assert "jljbot_flat_env_cfg" not in source
+  assert "jljbot_rough_env_cfg" not in source
+
+
+def test_jljlowbody_velocity_retains_lowbody_domain_randomization() -> None:
+  """JLJLowBody should keep its own foot friction and pseudo-inertia DR."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+
+  assert cfg.events["foot_friction"].params["asset_cfg"].geom_names == (
+    JLJLOWBODY_FOOT_COLLISION_NAMES
+  )
+  assert cfg.events["foot_friction"].params["shared_random"] is True
+
+  event_names = list(cfg.events)
+  assert "link_pseudo_inertia" in cfg.events
+  assert event_names.index("link_pseudo_inertia") < event_names.index("base_com")
+
+  assert "pd_gains" in cfg.events
+  pd_event = cfg.events["pd_gains"]
+  assert pd_event.func is dr.pd_gains
+  assert pd_event.params["asset_cfg"].actuator_names == ".*"
+  assert pd_event.params["kp_range"] == JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE
+  assert pd_event.params["kd_range"] == JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE
+  assert pd_event.params["operation"] == "scale"
+
+
+def test_jljlowbody_pd_randomization_can_be_disabled() -> None:
+  """JLJLowBody PD gain DR should be configurable."""
+  train_cfg = jljlowbody_flat_env_cfg(randomize_pd_gains=False)
+  play_cfg = jljlowbody_flat_env_cfg(play=True)
+
+  assert "pd_gains" not in train_cfg.events
+  assert "pd_gains" not in play_cfg.events
+
+
+def test_jljlowbody_actuator_delay_can_be_disabled() -> None:
+  """JLJLowBody command-delay randomization should be configurable."""
+  cfg = jljlowbody_flat_env_cfg(use_actuator_delay=False)
+  robot_cfg = cfg.scene.entities["robot"]
+  assert robot_cfg.articulation is not None
+
+  for actuator_cfg in robot_cfg.articulation.actuators:
+    assert actuator_cfg.delay_min_lag == 0
+    assert actuator_cfg.delay_max_lag == 0
+
+
+def test_jljlowbody_velocity_penalizes_action_jumps() -> None:
+  """JLJLowBody penalizes first- and second-order action jumps."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+
+  assert "action_rate_l2" in cfg.rewards
+  assert cfg.rewards["action_rate_l2"].func is velocity_mdp.action_rate_l2
+  assert cfg.rewards["action_rate_l2"].weight < 0.0
+  assert "action_acc_l2" in cfg.rewards
+  assert cfg.rewards["action_acc_l2"].func is velocity_mdp.action_acc_l2
+  assert cfg.rewards["action_acc_l2"].weight == pytest.approx(
+    JLJLOWBODY_ACTION_ACC_WEIGHT
+  )
+
+
+def test_jljlowbody_capsule_velocity_uses_capsule_foot_geoms() -> None:
+  """Capsule-foot JLJLowBody tasks should target the capsule foot collisions."""
+  cfg = load_env_cfg("JLJLowBodyCapsule-Velocity-Flat")
+
+  assert cfg.events["foot_friction"].params["asset_cfg"].geom_names == (
+    JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES
+  )
+  assert cfg.events["foot_friction"].params["shared_random"] is True
+
+
+def test_jljlowbody_actor_observation_noise_is_task_local() -> None:
+  """JLJLowBody actor observation noise should be configurable per task."""
+  cfg = jljlowbody_flat_env_cfg(include_actor_base_lin_vel=True)
+  actor_terms = cfg.observations["actor"].terms
+  critic_terms = cfg.observations["critic"].terms
+
+  for term_name, noise_range in JLJLOWBODY_ACTOR_NOISE_RANGES.items():
+    if term_name not in actor_terms:
+      continue
+
+    actor_term = actor_terms[term_name]
+    assert noise_range is not None
+    assert isinstance(actor_term.noise, UniformNoiseCfg)
+    assert actor_term.noise.n_min == pytest.approx(noise_range[0])
+    assert actor_term.noise.n_max == pytest.approx(noise_range[1])
+
+    if term_name in critic_terms:
+      assert actor_term is not critic_terms[term_name]
+
+
+def test_jljlowbody_foot_swing_height_reward_is_task_local() -> None:
+  """JLJLowBody should override foot swing reward params in its own config."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+  reward = cfg.rewards["foot_swing_height"]
+
+  for param_name, param_value in JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS.items():
+    if isinstance(param_value, float):
+      assert reward.params[param_name] == pytest.approx(param_value)
+    else:
+      assert reward.params[param_name] == param_value
+
+
+def test_jljlowbody_velocity_uses_standing_command_curriculum() -> None:
+  """JLJLowBody should keep extra standing and low-speed command coverage."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+  twist_cmd = cfg.commands["twist"]
+  assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+
+  first_stage = JLJLOWBODY_STANDING_COMMAND_STAGES[0]
+  assert twist_cmd.rel_standing_envs == pytest.approx(first_stage["rel_standing_envs"])
+  assert twist_cmd.rel_low_speed_envs == pytest.approx(
+    first_stage["rel_low_speed_envs"]
+  )
+  assert twist_cmd.low_speed_ranges.lin_vel_x == first_stage["low_speed_lin_vel_x"]
+  assert twist_cmd.low_speed_ranges.lin_vel_y == first_stage["low_speed_lin_vel_y"]
+  assert twist_cmd.low_speed_ranges.ang_vel_z == first_stage["low_speed_ang_vel_z"]
+
+  assert "standing_commands" in cfg.curriculum
+  curriculum = cfg.curriculum["standing_commands"]
+  assert curriculum.func is velocity_mdp.standing_commands_vel
+  assert curriculum.params["stages"] == JLJLOWBODY_STANDING_COMMAND_STAGES
+
+
+def test_jljlowbody_blind_rough_task_uses_local_blind_terrain_curriculum() -> None:
+  """Blind rough JLJLowBody should use step-based blind terrain progression."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Blind-Rough")
+
+  assert cfg.scene.terrain is not None
+  assert cfg.scene.terrain.terrain_generator is not None
+  assert cfg.scene.terrain.terrain_generator.curriculum is True
+  assert tuple(cfg.scene.terrain.terrain_generator.sub_terrains) == (
+    JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES
+  )
+  assert cfg.scene.terrain.terrain_generator.num_rows == JLJLOWBODY_BLIND_ROUGH_NUM_ROWS
+  assert cfg.scene.terrain.terrain_generator.size == JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE
+  assert "terrain_levels" in cfg.curriculum
+  assert cfg.curriculum["terrain_levels"].func is velocity_mdp.terrain_levels_by_step
+  assert cfg.curriculum["terrain_levels"].params["stages"] == (
+    JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES
+  )
+  assert cfg.scene.terrain.max_init_terrain_level == 0
+
+
+def test_jljlowbody_blind_rough_is_blind_to_height_scan() -> None:
+  """Blind rough JLJLowBody should remove terrain scan observations."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Blind-Rough")
+
+  sensor_names = {sensor.name for sensor in (cfg.scene.sensors or ())}
+  assert "terrain_scan" not in sensor_names
+  assert "height_scan" not in cfg.observations["actor"].terms
+  assert "height_scan" not in cfg.observations["critic"].terms
+
+
+def test_jljlowbody_blind_rough_play_randomizes_without_curriculum() -> None:
+  """Blind rough play mode should disable terrain curriculum for inspection."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Blind-Rough", play=True)
+
+  assert cfg.scene.terrain is not None
+  assert cfg.scene.terrain.terrain_generator is not None
+  assert cfg.scene.terrain.terrain_generator.curriculum is False
+
+
+def test_jljlowbody_blind_rough_uses_separate_experiment_name() -> None:
+  """Blind rough JLJLowBody should log to its own experiment directory."""
+  rl_cfg = load_rl_cfg("JLJLowBody-Velocity-Blind-Rough")
+
+  assert rl_cfg.experiment_name == "jljlowbody_blind_rough_velocity"
+
+
+def test_jljlowbody_capsule_tasks_use_separate_experiment_names() -> None:
+  """Capsule-foot JLJLowBody tasks should log separately from sphere-foot tasks."""
+  flat_rl_cfg = load_rl_cfg("JLJLowBodyCapsule-Velocity-Flat")
+  blind_rl_cfg = load_rl_cfg("JLJLowBodyCapsule-Velocity-Blind-Rough")
+
+  assert flat_rl_cfg.experiment_name == "jljlowbody_capsule_velocity"
+  assert blind_rl_cfg.experiment_name == "jljlowbody_capsule_blind_rough_velocity"
+
+
+def test_step_based_terrain_curriculum_progresses_by_training_step() -> None:
+  """Step-based terrain curriculum should widen the sampled terrain levels."""
+  terrain = SimpleNamespace(
+    cfg=SimpleNamespace(
+      terrain_generator=SimpleNamespace(
+        sub_terrains={"flat": object(), "wave_low": object()}
+      )
+    ),
+    terrain_origins=torch.zeros(10, 2, 3),
+    env_origins=torch.zeros(4, 3),
+    terrain_levels=torch.zeros(4, dtype=torch.long),
+    terrain_types=torch.tensor([0, 1, 0, 1], dtype=torch.long),
+  )
+  env = SimpleNamespace(scene=SimpleNamespace(terrain=terrain), common_step_counter=0)
+  term_cfg = CurriculumTermCfg(
+    func=velocity_mdp.terrain_levels_by_step,
+    params={
+      "stages": [
+        {"step": 0, "min_level": 0, "max_level": 0},
+        {"step": 12, "min_level": 0, "max_level": 3},
+      ]
+    },
+  )
+
+  mock_env = cast(Any, env)
+  term = velocity_mdp.terrain_levels_by_step(term_cfg, mock_env)
+  state = term(mock_env, torch.arange(4), stages=term_cfg.params["stages"])
+
+  assert int(state["stage_max_level"].item()) == 0
+  assert torch.all(terrain.terrain_levels == 0)
+
+  env.common_step_counter = 12
+  state = term(mock_env, torch.arange(4), stages=term_cfg.params["stages"])
+
+  assert int(state["stage_max_level"].item()) == 3
+  assert torch.all((terrain.terrain_levels >= 0) & (terrain.terrain_levels <= 3))
+
+
+def test_standing_command_curriculum_progresses_by_training_step() -> None:
+  """Standing command curriculum should update zero and near-zero ratios."""
+  command_cfg = UniformVelocityCommandCfg(
+    entity_name="robot",
+    resampling_time_range=(3.0, 8.0),
+    ranges=UniformVelocityCommandCfg.Ranges(
+      lin_vel_x=(-1.0, 1.0),
+      lin_vel_y=(-1.0, 1.0),
+      ang_vel_z=(-0.5, 0.5),
+    ),
+  )
+  command_term = SimpleNamespace(cfg=command_cfg)
+  env = SimpleNamespace(
+    common_step_counter=0,
+    command_manager=SimpleNamespace(get_term=lambda _name: command_term),
+  )
+  stages: list[velocity_mdp.StandingVelocityStage] = [
+    {
+      "step": 0,
+      "rel_standing_envs": 0.4,
+      "rel_low_speed_envs": 0.2,
+      "low_speed_lin_vel_x": (-0.03, 0.03),
+      "low_speed_lin_vel_y": (-0.02, 0.02),
+      "low_speed_ang_vel_z": (-0.01, 0.01),
+    },
+    {
+      "step": 10,
+      "rel_standing_envs": 0.15,
+      "rel_low_speed_envs": 0.1,
+      "low_speed_lin_vel_x": (-0.06, 0.06),
+      "low_speed_lin_vel_y": (-0.05, 0.05),
+      "low_speed_ang_vel_z": (-0.04, 0.04),
+    },
+  ]
+
+  mock_env = cast(Any, env)
+  state = velocity_mdp.standing_commands_vel(
+    mock_env,
+    torch.arange(4),
+    command_name="twist",
+    stages=stages,
+  )
+
+  assert command_cfg.rel_standing_envs == pytest.approx(0.4)
+  assert command_cfg.rel_low_speed_envs == pytest.approx(0.2)
+  assert command_cfg.low_speed_ranges.lin_vel_x == (-0.03, 0.03)
+  assert state["rel_standing_envs"].item() == pytest.approx(0.4)
+
+  env.common_step_counter = 10
+  state = velocity_mdp.standing_commands_vel(
+    mock_env,
+    torch.arange(4),
+    command_name="twist",
+    stages=stages,
+  )
+
+  assert command_cfg.rel_standing_envs == pytest.approx(0.15)
+  assert command_cfg.rel_low_speed_envs == pytest.approx(0.1)
+  assert command_cfg.low_speed_ranges.ang_vel_z == (-0.04, 0.04)
+  assert state["stage_step"].item() == 10

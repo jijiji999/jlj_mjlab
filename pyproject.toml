@@ -63,6 +63,8 @@ demo = "mjlab.scripts.demo:main"
 list-envs = "mjlab.scripts.list_envs:main"
 viz-nan = "mjlab.scripts.nan_viz:main"
 export-scene = "mjlab.scripts.export_scene:main"
+lowbody-pd-response-test = "mjlab.scripts.lowbody_pd_response_test:main"
+lowbody-pd-response-gui = "mjlab.scripts.lowbody_pd_response_gui:main"
 
 [dependency-groups]
 dev = [

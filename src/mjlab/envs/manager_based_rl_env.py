@@ -1,4 +1,5 @@
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -186,6 +187,7 @@ class ManagerBasedRlEnv:
     if self.cfg.seed is not None:
       self.cfg.seed = self.seed(self.cfg.seed)
     self._sim_step_counter = 0
+    self._physics_step_callbacks: list[Callable[[int, float], None]] = []
     self.extras = {}
     self.obs_buf = {}
     self._manual_reset_pending = torch.zeros(
@@ -288,6 +290,31 @@ class ManagerBasedRlEnv:
     return self
 
   # Methods.
+
+  def add_physics_step_callback(
+    self, callback: Callable[[int, float], None]
+  ) -> Callable[[], None]:
+    """Register a callback called after each physics step inside decimation.
+
+    The callback receives the global simulation step counter and elapsed
+    simulation time in seconds. The returned function unregisters the callback.
+    """
+    self._physics_step_callbacks.append(callback)
+
+    def remove_callback() -> None:
+      self.remove_physics_step_callback(callback)
+
+    return remove_callback
+
+  def remove_physics_step_callback(
+    self,
+    callback: Callable[[int, float], None],
+  ) -> None:
+    """Remove a previously registered physics-step callback."""
+    try:
+      self._physics_step_callbacks.remove(callback)
+    except ValueError:
+      pass
 
   def setup_manager_visualizers(self) -> None:
     self.manager_visualizers = {}
@@ -425,6 +452,8 @@ class ManagerBasedRlEnv:
       self.sim.step()
       self.scene.update(dt=self.physics_dt)
       self.metrics_manager.compute_substep()
+      for callback in tuple(self._physics_step_callbacks):
+        callback(self._sim_step_counter, self._sim_step_counter * self.physics_dt)
 
     # Update env counters.
     self.episode_length_buf += 1

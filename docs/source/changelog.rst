@@ -22,6 +22,15 @@ Added
 - Added JLJBot asset zoo constants and velocity task configurations.
 - Added automatic simplified box collision generation for JLJBot collision
   meshes.
+- Added a lower-body-only ``lowbody`` JLJBot MJCF variant with the arm chain,
+  ``waist_pitch_link``, and waist joints removed.
+- Added ``JLJLowBody-Velocity-Flat`` and ``JLJLowBody-Velocity-Rough`` velocity
+  tasks backed by the new lower-body-only JLJBot variant.
+- Added ``JLJLowBody-Velocity-Blind-Rough``, a blind rough-terrain velocity task
+  with terrain curriculum over low undulating surfaces and no ``height_scan``
+  observation.
+- Added ``JLJLowBodyCapsule`` velocity tasks that use capsule foot collision
+  geoms instead of sparse foot spheres for more continuous sole contact.
 - Added a JLJBot-private reward module for robot-specific velocity reward terms.
 - Added a JLJBot hip-roll default-pose deviation penalty for discouraging
   excessive lateral hip motion.
@@ -40,6 +49,21 @@ Added
 - Added optional ``play --report`` output for velocity tasks, saving summary
   metrics and PNG plots such as command-vs-actual velocity tracking error,
   base attitude, reward trend, and action smoothness during playback.
+- Added ``play --command-eval`` for fixed velocity-command playback evaluation
+  during normal viewer playback, saving per-joint position, velocity, and
+  actuator-torque and joint-power curves plus policy actions and joint position
+  targets as CSV, NPZ, PNG, clickable-legend HTML plots, and a combined
+  joint-position-vs-target HTML comparison over the requested command duration.
+  Joint state is sampled at the MuJoCo physics substep rate while policy actions
+  remain at the control rate.
+- Added ``JLJBot`` and ``JLJLowBody`` to the interactive terrain visualizer, so
+  custom JLJ rough-terrain setups can be inspected with the robot mesh before
+  training.
+- Added play-time terrain overrides for forcing flat, standard rough, or
+  low-amplitude random rough terrain at a chosen difficulty without changing the
+  task's training terrain configuration. The play-only random rough terrain uses
+  a thicker heightfield base to avoid low-difficulty terrain tunneling artifacts
+  during policy checks.
 
 Changed
 ^^^^^^^
@@ -51,6 +75,34 @@ Changed
 - JLJBot velocity tasks now default to a fixed ``0.5`` joint-position action
   scale, with a ``use_fixed_action_scale`` toggle to restore the original
   per-joint adaptive scale when needed.
+- JLJLowBody velocity tasks now build from their own task-local environment
+  config instead of delegating to the JLJBot config factories, so future
+  JLJLowBody tuning no longer spills over to JLJBot tasks.
+- JLJLowBody velocity tasks now override actor observation noise in their own
+  task config, making it easy to tune per-term noise ranges without changing
+  other velocity tasks.
+- JLJLowBody velocity tasks now override ``foot_swing_height`` reward
+  parameters in their own task config, so gait-height shaping can be tuned
+  without affecting other velocity tasks.
+- JLJLowBody velocity tasks now use a standing-command curriculum with extra
+  zero and near-zero velocity samples to improve stationary stability.
+- JLJLowBody joint actuators now use ``DcMotorActuatorCfg`` with
+  velocity-based torque saturation, so their configured ``velocity_limit``
+  affects training and playback instead of being ignored by a position-only
+  actuator model.
+- JLJLowBody velocity tasks now support startup PD gain randomization with a
+  ``randomize_pd_gains`` toggle, and expose exact per-joint action scale values
+  for independent joint-level tuning.
+- JLJLowBody velocity tasks now expose a ``use_actuator_delay`` toggle for
+  enabling or disabling per-joint command-delay randomization.
+- JLJLowBody velocity tasks now add a small ``action_acc_l2`` penalty to
+  discourage second-order action jumps and reduce command jitter.
+- ``JLJLowBody-Velocity-Blind-Rough`` now uses a step-based terrain curriculum,
+  mirroring velocity-stage progression instead of performance-based terrain
+  promotion.
+- ``JLJLowBody-Velocity-Blind-Rough`` now uses a lighter blind-terrain set
+  (fewer terrain types, fewer rows, and coarser roughness) to better support
+  large parallel environment counts.
 - Velocity play viewers now show the selected command and the robot's measured
   ``vx/vy/wz`` values in the status overlay for faster training inspection.
 - Curriculum-mode terrain difficulty is now deterministic across rows
@@ -70,6 +122,8 @@ Changed
 Fixed
 ^^^^^
 
+- Fixed JLJLowBody foot collision configuration so the fifth foot sphere on
+  each side receives foot contact parameters and friction randomization.
 - Fixed domain randomization events that target different ``axes`` of the same
   model field (e.g. two ``dr.geom_size`` events scaling axis 0 and axis 1
   separately) silently clobbering each other. Each event now writes back only

@@ -3,6 +3,7 @@
 import os
 import sys
 import time as _time
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,9 +12,13 @@ from typing import Literal
 import torch
 import tyro
 
-from mjlab.envs import ManagerBasedRlEnv
+from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper
 from mjlab.scripts._cli import maybe_print_top_level_help
+from mjlab.scripts.play_command_eval import (
+  PlayCommandEvalEnvWrapper,
+  default_play_command_eval_dir,
+)
 from mjlab.scripts.play_report import (
   PlayReportEnvWrapper,
   default_play_report_dir,
@@ -21,11 +26,16 @@ from mjlab.scripts.play_report import (
 from mjlab.scripts.play_trace import PlayTraceEnvWrapper, default_play_trace_path
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg, load_runner_cls
 from mjlab.tasks.tracking.mdp import MotionCommandCfg
+from mjlab.terrains import TerrainEntityCfg, TerrainGeneratorCfg
+from mjlab.terrains.config import ROUGH_TERRAINS_CFG, random_rough
 from mjlab.utils.os import get_wandb_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
 from mjlab.viewer import NativeMujocoViewer, ViserPlayViewer
 from mjlab.viewer.viser.viewer import CheckpointManager, format_time_ago
+
+PlayTerrainMode = Literal["task", "plane", "rough", "random_rough"]
+PLAY_RANDOM_ROUGH_BASE_THICKNESS_RATIO = 10.0
 
 
 def _parse_wandb_dt(value: str | datetime) -> datetime:
@@ -52,6 +62,16 @@ class PlayConfig:
   video_width: int | None = None
   camera: int | str | None = None
   viewer: Literal["auto", "native", "viser"] = "auto"
+  play_terrain: PlayTerrainMode = "task"
+  """Override terrain for playback. 'task' keeps the task's play config."""
+  terrain_difficulty: float = 0.5
+  """Fixed terrain difficulty for play terrain overrides, in [0, 1]."""
+  terrain_rows: int = 1
+  """Number of generated terrain rows for play terrain overrides."""
+  terrain_cols: int = 5
+  """Number of generated terrain columns for play terrain overrides."""
+  terrain_seed: int | None = None
+  """Optional seed for reproducible play terrain generation."""
   no_terminations: bool = False
   """Disable all termination conditions (useful for viewing motions with dummy agents)."""
   log_root: str = "logs/rsl_rl"
@@ -78,9 +98,106 @@ class PlayConfig:
   """Scene entity name to evaluate when ``--report`` is enabled."""
   report_command_name: str = "twist"
   """Command term name to compare against robot motion in the report."""
+  command_eval: bool = False
+  """Record a fixed velocity-command evaluation during normal viewer playback."""
+  command_eval_velocity: tuple[float, float, float] = (0.0, 0.0, 0.0)
+  """Fixed ``(vx, vy, wz)`` command in body-frame m/s, m/s, and rad/s."""
+  command_eval_duration: float = 5.0
+  """Duration in seconds for the fixed velocity-command evaluation."""
+  command_eval_dir: str | None = None
+  """Optional output directory for ``--command-eval`` artifacts."""
+  command_eval_env_id: int = 0
+  """Environment id to evaluate when ``--command-eval`` is enabled."""
+  command_eval_interval: int = 1
+  """Record every N policy steps when ``--command-eval`` is enabled."""
+  command_eval_entity: str = "robot"
+  """Scene entity name whose joints are recorded during command evaluation."""
+  command_eval_command_name: str = "twist"
+  """Command term name to force during command evaluation."""
 
   # Internal flag used by demo script.
   _demo_mode: tyro.conf.Suppress[bool] = False
+
+
+def _validate_play_terrain_cfg(cfg: PlayConfig) -> None:
+  if not 0.0 <= cfg.terrain_difficulty <= 1.0:
+    raise ValueError(
+      f"terrain_difficulty must be within [0, 1], got {cfg.terrain_difficulty}."
+    )
+  if cfg.terrain_rows < 1:
+    raise ValueError(f"terrain_rows must be >= 1, got {cfg.terrain_rows}.")
+  if cfg.terrain_cols < 1:
+    raise ValueError(f"terrain_cols must be >= 1, got {cfg.terrain_cols}.")
+
+
+def _make_play_terrain_generator_cfg(cfg: PlayConfig) -> TerrainGeneratorCfg:
+  _validate_play_terrain_cfg(cfg)
+  difficulty_range = (cfg.terrain_difficulty, cfg.terrain_difficulty)
+
+  if cfg.play_terrain == "rough":
+    terrain_cfg = deepcopy(ROUGH_TERRAINS_CFG)
+    terrain_cfg.curriculum = False
+    terrain_cfg.num_rows = cfg.terrain_rows
+    terrain_cfg.num_cols = cfg.terrain_cols
+    terrain_cfg.border_width = 10.0
+    terrain_cfg.difficulty_range = difficulty_range
+    terrain_cfg.seed = cfg.terrain_seed
+    return terrain_cfg
+
+  if cfg.play_terrain == "random_rough":
+    return TerrainGeneratorCfg(
+      seed=cfg.terrain_seed,
+      curriculum=False,
+      size=(6.0, 6.0),
+      border_width=10.0,
+      num_rows=cfg.terrain_rows,
+      num_cols=cfg.terrain_cols,
+      difficulty_range=difficulty_range,
+      sub_terrains={
+        "random_rough": random_rough(
+          proportion=1.0,
+          noise_range=(0.005, 0.025),
+          noise_step=0.005,
+          horizontal_scale=0.15,
+          downsampled_scale=0.3,
+          border_width=0.25,
+          base_thickness_ratio=PLAY_RANDOM_ROUGH_BASE_THICKNESS_RATIO,
+          scale_with_difficulty=True,
+        ),
+      },
+      add_lights=True,
+    )
+
+  raise ValueError(f"Unsupported play terrain override: {cfg.play_terrain}")
+
+
+def _apply_play_terrain_override(
+  env_cfg: ManagerBasedRlEnvCfg,
+  cfg: PlayConfig,
+) -> None:
+  if cfg.play_terrain == "task":
+    return
+
+  terrain_cfg = env_cfg.scene.terrain
+  if terrain_cfg is None:
+    terrain_cfg = TerrainEntityCfg()
+    env_cfg.scene.terrain = terrain_cfg
+
+  if cfg.play_terrain == "plane":
+    terrain_cfg.terrain_type = "plane"
+    terrain_cfg.terrain_generator = None
+    terrain_cfg.max_init_terrain_level = None
+    print("[INFO]: Play terrain override: plane")
+    return
+
+  terrain_generator = _make_play_terrain_generator_cfg(cfg)
+  terrain_cfg.terrain_type = "generator"
+  terrain_cfg.terrain_generator = terrain_generator
+  terrain_cfg.max_init_terrain_level = cfg.terrain_rows - 1
+  print(
+    "[INFO]: Play terrain override: "
+    f"{cfg.play_terrain}, difficulty={cfg.terrain_difficulty:.3f}"
+  )
 
 
 def run_play(task_id: str, cfg: PlayConfig):
@@ -188,6 +305,8 @@ def run_play(task_id: str, cfg: PlayConfig):
     env_cfg.viewer.height = cfg.video_height
   if cfg.video_width is not None:
     env_cfg.viewer.width = cfg.video_width
+
+  _apply_play_terrain_override(env_cfg, cfg)
 
   render_mode = "rgb_array" if (TRAINED_MODE and cfg.video) else None
   if cfg.video and DUMMY_MODE:
@@ -315,6 +434,46 @@ def run_play(task_id: str, cfg: PlayConfig):
     resolved_viewer = cfg.viewer
 
   play_env = env
+  viewer_num_steps: int | None = None
+  if cfg.command_eval:
+    command_eval_dir = (
+      Path(cfg.command_eval_dir).expanduser()
+      if cfg.command_eval_dir is not None
+      else default_play_command_eval_dir(
+        task_id,
+        log_dir=log_dir,
+        log_root=cfg.log_root,
+      )
+    )
+    play_env = PlayCommandEvalEnvWrapper(
+      play_env,
+      output_dir=command_eval_dir,
+      task_id=task_id,
+      command_velocity=cfg.command_eval_velocity,
+      duration_s=cfg.command_eval_duration,
+      entity_name=cfg.command_eval_entity,
+      command_name=cfg.command_eval_command_name,
+      env_id=cfg.command_eval_env_id,
+      interval=cfg.command_eval_interval,
+      checkpoint_file=resume_path,
+    )
+    viewer_num_steps = play_env.recorder.num_steps
+    print(
+      "[INFO] Recording fixed command evaluation while playing: "
+      f"vx={cfg.command_eval_velocity[0]:+.3f}, "
+      f"vy={cfg.command_eval_velocity[1]:+.3f}, "
+      f"wz={cfg.command_eval_velocity[2]:+.3f}, "
+      f"duration={cfg.command_eval_duration:.3f}s"
+    )
+    print(
+      "[INFO] Command evaluation sampling: "
+      f"policy={1.0 / play_env.recorder.step_dt:.1f}Hz, "
+      f"physics_joint={1.0 / play_env.recorder.physics_dt:.1f}Hz "
+      f"(dt={play_env.recorder.physics_dt:.6f}s, "
+      f"decimation={play_env.recorder.decimation})"
+    )
+    print(f"[INFO] Command evaluation output: {command_eval_dir}")
+
   if cfg.trace:
     trace_path = (
       Path(cfg.trace_path).expanduser()
@@ -350,9 +509,11 @@ def run_play(task_id: str, cfg: PlayConfig):
 
   try:
     if resolved_viewer == "native":
-      NativeMujocoViewer(play_env, policy).run()
+      NativeMujocoViewer(play_env, policy).run(num_steps=viewer_num_steps)
     elif resolved_viewer == "viser":
-      ViserPlayViewer(play_env, policy, checkpoint_manager=ckpt_manager).run()
+      ViserPlayViewer(play_env, policy, checkpoint_manager=ckpt_manager).run(
+        num_steps=viewer_num_steps
+      )
     else:
       raise RuntimeError(f"Unsupported viewer backend: {resolved_viewer}")
   finally:
