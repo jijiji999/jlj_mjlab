@@ -18,6 +18,8 @@ from .geom import geom_pos as geom_pos
 from .geom import geom_quat as geom_quat
 from .geom import geom_rgba as geom_rgba
 from .geom import geom_size as geom_size
+from .geom import geom_solimp as geom_solimp
+from .geom import geom_solref as geom_solref
 
 # Body.
 # isort: split

@@ -68,6 +68,9 @@ Added
   actuator delay, foot contact parameters, terrain setup, and related rewards.
 - Added capsule-flat JLJLowBody ankle encoder-bias randomization with a
   ``randomize_ankle_encoder_bias`` factory toggle.
+- Added ``dr.geom_solref`` and ``dr.geom_solimp`` contact-parameter
+  randomization, and enabled capsule-flat JLJLowBody foot contact softness
+  randomization through ``randomize_foot_contact_softness``.
 
 Changed
 ^^^^^^^

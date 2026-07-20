@@ -475,6 +475,34 @@ def test_jljlowbody_capsule_flat_randomizes_ankle_encoder_bias() -> None:
   assert "ankle_encoder_bias" not in disabled_cfg.events
 
 
+def test_jljlowbody_capsule_flat_randomizes_foot_contact_softness() -> None:
+  """Capsule flat JLJLowBody should randomize foot contact softness."""
+  cfg = load_env_cfg("JLJLowBodyCapsule-Velocity-Flat")
+
+  assert "foot_contact_softness" in cfg.events
+  event = cfg.events["foot_contact_softness"]
+  assert event.mode == "startup"
+  assert event.func is dr.geom_solref
+  assert event.params["asset_cfg"].geom_names == (
+    JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES
+  )
+  assert (
+    event.params["ranges"]
+    == lowbody_randomization.JLJLOWBODY_FOOT_SOLREF_TIMECONST_RANGE
+  )
+  assert event.params["operation"] == "abs"
+  assert event.params["axes"] == [0]
+  assert event.params["shared_random"] is True
+
+  play_cfg = load_env_cfg("JLJLowBodyCapsule-Velocity-Flat", play=True)
+  assert "foot_contact_softness" not in play_cfg.events
+
+  disabled_cfg = jljlowbody_env_cfgs.jljlowbody_capsule_flat_env_cfg(
+    randomize_foot_contact_softness=False
+  )
+  assert "foot_contact_softness" not in disabled_cfg.events
+
+
 def test_jljlowbody_actor_observation_noise_is_task_local() -> None:
   """JLJLowBody actor observation noise should be configurable per task."""
   cfg = jljlowbody_flat_env_cfg(include_actor_base_lin_vel=True)

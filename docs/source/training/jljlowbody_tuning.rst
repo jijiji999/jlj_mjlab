@@ -26,6 +26,8 @@ JLJLowBody 的环境配置在
 - ``randomize_pd_gains``：是否开启 PD 增益随机化。
 - ``randomize_ankle_encoder_bias``：是否在 capsule flat 训练任务里额外开启
   踝关节 encoder bias 随机化。
+- ``randomize_foot_contact_softness``：是否在 capsule flat 训练任务里额外开启
+  脚底接触软硬度随机化。
 - ``use_actuator_delay``：是否开启执行器命令延迟。
 - ``use_standing_command_curriculum``：是否开启后加入的低速稳定性课程，
   默认是 ``False``。
@@ -85,7 +87,7 @@ PD 与 PD 随机化
 
 .. code-block:: python
 
-   JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE = (-0.05, 0.05)
+   JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE = (-0.06, 0.06)
    JLJLOWBODY_ANKLE_JOINT_NAMES = (".*_ankle_.*_joint",)
 
 基础速度环境已经有全关节 ``encoder_bias``，范围是 ``(-0.02, 0.02)``。
@@ -189,6 +191,23 @@ action scale 由 ``use_fixed_action_scale`` 控制。默认是 ``True``，使用
 ``src/mjlab/tasks/velocity/velocity_env_cfg.py`` 的 ``foot_friction`` 事件。
 JLJLowBody 会在 ``env_cfgs.py`` 里把这个事件的 ``geom_names`` 改为自己的
 脚底碰撞体名字。
+
+``jljlowbody_capsule_flat_env_cfg`` 还会额外随机化脚底接触软硬度：
+
+.. code-block:: python
+
+   JLJLOWBODY_FOOT_SOLREF_TIMECONST_RANGE = (0.006, 0.02)
+
+这个事件名是 ``foot_contact_softness``，随机的是 capsule 脚底碰撞体的
+``geom_solref[0]``。数值越小接触越硬，数值越大接触越软；``solref[1]``
+和 ``solimp`` 保持 nominal 值。左右脚底 capsule 在同一个环境内共享同一个
+采样值。
+
+关闭示例：
+
+.. code-block:: python
+
+   cfg = jljlowbody_capsule_flat_env_cfg(randomize_foot_contact_softness=False)
 
 
 地形配置

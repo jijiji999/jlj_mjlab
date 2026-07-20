@@ -455,6 +455,7 @@ def jljlowbody_capsule_flat_env_cfg(
   use_fixed_action_scale: bool = False,
   randomize_pd_gains: bool = True,
   randomize_ankle_encoder_bias: bool = True,
+  randomize_foot_contact_softness: bool = True,
   use_actuator_delay: bool = True,
   use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
@@ -469,6 +470,12 @@ def jljlowbody_capsule_flat_env_cfg(
     use_standing_command_curriculum=use_standing_command_curriculum,
   )
   _add_capsule_flat_phase_gait_terms(cfg)
+  if randomize_foot_contact_softness:
+    lowbody_randomization.apply_foot_contact_softness_randomization(
+      cfg,
+      foot_collision_names=JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES,
+      play=play,
+    )
   if randomize_ankle_encoder_bias:
     lowbody_randomization.apply_ankle_encoder_bias_randomization(cfg, play=play)
   return cfg

@@ -300,6 +300,47 @@ def test_invalid_axes_raises(env):
     )
 
 
+def test_geom_solref_randomizes_contact_time_constant(device):
+  """geom_solref randomizes selected contact solver reference axes."""
+  env = create_test_env(device, num_envs=4, expand_fields=("geom_solref",))
+  robot = env.scene["robot"]
+  geom_idx = robot.indexing.geom_ids[0]
+  default_solref = env.sim.get_default_field("geom_solref")[geom_idx].clone()
+
+  dr.geom_solref(
+    env,
+    env_ids=None,
+    ranges=(0.006, 0.02),
+    operation="abs",
+    asset_cfg=SceneEntityCfg("robot", geom_ids=[0]),
+  )
+
+  result = env.sim.model.geom_solref[:, geom_idx]
+  assert torch.all((result[:, 0] >= 0.006) & (result[:, 0] <= 0.02))
+  assert torch.allclose(result[:, 1], default_solref[1].expand_as(result[:, 1]))
+
+
+def test_geom_solimp_randomizes_selected_axes(device):
+  """geom_solimp supports axis-selective impedance randomization."""
+  env = create_test_env(device, num_envs=2, expand_fields=("geom_solimp",))
+  robot = env.scene["robot"]
+  geom_idx = robot.indexing.geom_ids[0]
+  default_solimp = env.sim.get_default_field("geom_solimp")[geom_idx].clone()
+
+  dr.geom_solimp(
+    env,
+    env_ids=None,
+    ranges=(0.8, 0.9),
+    operation="abs",
+    asset_cfg=SceneEntityCfg("robot", geom_ids=[0]),
+    axes=[0],
+  )
+
+  result = env.sim.model.geom_solimp[:, geom_idx]
+  assert torch.all((result[:, 0] >= 0.8) & (result[:, 0] <= 0.9))
+  assert torch.allclose(result[:, 1:], default_solimp[1:].expand_as(result[:, 1:]))
+
+
 # String-keyed ranges.
 
 

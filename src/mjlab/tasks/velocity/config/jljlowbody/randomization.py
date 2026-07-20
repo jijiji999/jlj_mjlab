@@ -21,6 +21,7 @@ JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE = (0.8, 1.2)
 JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE = (0.9, 1.1)
 JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE = (-0.06, 0.06)
 JLJLOWBODY_ANKLE_JOINT_NAMES = (".*_ankle_.*_joint",)
+JLJLOWBODY_FOOT_SOLREF_TIMECONST_RANGE = (0.004, 0.015)
 JLJLOWBODY_ACTOR_NOISE_RANGES: dict[str, tuple[float, float] | None] = {
   "base_lin_vel": (-0.5, 0.5),
   "base_ang_vel": (-0.2, 0.2),
@@ -100,5 +101,28 @@ def apply_ankle_encoder_bias_randomization(
     params={
       "asset_cfg": SceneEntityCfg("robot", joint_names=JLJLOWBODY_ANKLE_JOINT_NAMES),
       "bias_range": JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE,
+    },
+  )
+
+
+def apply_foot_contact_softness_randomization(
+  cfg: ManagerBasedRlEnvCfg,
+  *,
+  foot_collision_names: tuple[str, ...],
+  play: bool,
+) -> None:
+  """Randomize JLJLowBody foot contact softness through ``solref[0]``."""
+  if play:
+    return
+
+  cfg.events["foot_contact_softness"] = EventTermCfg(
+    mode="startup",
+    func=dr.geom_solref,
+    params={
+      "asset_cfg": SceneEntityCfg("robot", geom_names=foot_collision_names),
+      "ranges": JLJLOWBODY_FOOT_SOLREF_TIMECONST_RANGE,
+      "operation": "abs",
+      "axes": [0],
+      "shared_random": True,
     },
   )
