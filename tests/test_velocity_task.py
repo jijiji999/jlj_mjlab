@@ -25,19 +25,14 @@ from mjlab.tasks.velocity.config.jljbot.env_cfgs import (
   JLJBOT_FIXED_ACTION_SCALE,
   jljbot_flat_env_cfg,
 )
+from mjlab.tasks.velocity.config.jljlowbody import curriculums as lowbody_curriculums
 from mjlab.tasks.velocity.config.jljlowbody import env_cfgs as jljlowbody_env_cfgs
+from mjlab.tasks.velocity.config.jljlowbody import (
+  randomization as lowbody_randomization,
+)
+from mjlab.tasks.velocity.config.jljlowbody import rewards as lowbody_rewards
 from mjlab.tasks.velocity.config.jljlowbody.env_cfgs import (
-  JLJLOWBODY_ACTION_ACC_WEIGHT,
-  JLJLOWBODY_ACTOR_NOISE_RANGES,
-  JLJLOWBODY_BLIND_ROUGH_NUM_ROWS,
-  JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE,
-  JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES,
-  JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES,
   JLJLOWBODY_FIXED_ACTION_SCALE,
-  JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS,
-  JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE,
-  JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE,
-  JLJLOWBODY_STANDING_COMMAND_STAGES,
   jljlowbody_flat_env_cfg,
 )
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
@@ -373,8 +368,14 @@ def test_jljlowbody_velocity_retains_lowbody_domain_randomization() -> None:
   pd_event = cfg.events["pd_gains"]
   assert pd_event.func is dr.pd_gains
   assert pd_event.params["asset_cfg"].actuator_names == ".*"
-  assert pd_event.params["kp_range"] == JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE
-  assert pd_event.params["kd_range"] == JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE
+  assert (
+    pd_event.params["kp_range"]
+    == lowbody_randomization.JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE
+  )
+  assert (
+    pd_event.params["kd_range"]
+    == lowbody_randomization.JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE
+  )
   assert pd_event.params["operation"] == "scale"
 
 
@@ -408,7 +409,33 @@ def test_jljlowbody_velocity_penalizes_action_jumps() -> None:
   assert "action_acc_l2" in cfg.rewards
   assert cfg.rewards["action_acc_l2"].func is velocity_mdp.action_acc_l2
   assert cfg.rewards["action_acc_l2"].weight == pytest.approx(
-    JLJLOWBODY_ACTION_ACC_WEIGHT
+    lowbody_rewards.JLJLOWBODY_ACTION_ACC_WEIGHT
+  )
+
+
+def test_jljlowbody_private_terms_are_not_exported_from_common_velocity_mdp() -> None:
+  """JLJLowBody-only curricula should stay outside the shared velocity MDP."""
+  assert not hasattr(velocity_mdp, "standing_commands_vel")
+  assert not hasattr(velocity_mdp, "terrain_levels_by_step")
+  assert not hasattr(velocity_mdp, "StandingVelocityStage")
+  assert not hasattr(velocity_mdp, "TerrainLevelStage")
+
+
+def test_jljlowbody_hip_deviation_rewards_are_private() -> None:
+  """JLJLowBody hip-shaping terms should use JLJLowBody reward helpers."""
+  cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
+
+  assert (
+    cfg.rewards["hip_roll_deviation"].func
+    is lowbody_rewards.hip_roll_initial_deviation_l2
+  )
+  assert (
+    cfg.rewards["hip_pitch_deviation"].func
+    is lowbody_rewards.hip_pitch_initial_deviation_l2
+  )
+  assert (
+    cfg.rewards["hip_yaw_deviation"].func
+    is lowbody_rewards.hip_yaw_initial_deviation_l2
   )
 
 
@@ -422,13 +449,42 @@ def test_jljlowbody_capsule_velocity_uses_capsule_foot_geoms() -> None:
   assert cfg.events["foot_friction"].params["shared_random"] is True
 
 
+def test_jljlowbody_capsule_flat_randomizes_ankle_encoder_bias() -> None:
+  """Capsule flat JLJLowBody should randomize ankle encoder bias during training."""
+  cfg = load_env_cfg("JLJLowBodyCapsule-Velocity-Flat")
+
+  assert "ankle_encoder_bias" in cfg.events
+  event = cfg.events["ankle_encoder_bias"]
+  assert event.mode == "startup"
+  assert event.func is dr.encoder_bias
+  assert (
+    event.params["bias_range"]
+    == lowbody_randomization.JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE
+  )
+  assert (
+    event.params["asset_cfg"].joint_names
+    == lowbody_randomization.JLJLOWBODY_ANKLE_JOINT_NAMES
+  )
+
+  play_cfg = load_env_cfg("JLJLowBodyCapsule-Velocity-Flat", play=True)
+  assert "ankle_encoder_bias" not in play_cfg.events
+
+  disabled_cfg = jljlowbody_env_cfgs.jljlowbody_capsule_flat_env_cfg(
+    randomize_ankle_encoder_bias=False
+  )
+  assert "ankle_encoder_bias" not in disabled_cfg.events
+
+
 def test_jljlowbody_actor_observation_noise_is_task_local() -> None:
   """JLJLowBody actor observation noise should be configurable per task."""
   cfg = jljlowbody_flat_env_cfg(include_actor_base_lin_vel=True)
   actor_terms = cfg.observations["actor"].terms
   critic_terms = cfg.observations["critic"].terms
 
-  for term_name, noise_range in JLJLOWBODY_ACTOR_NOISE_RANGES.items():
+  for (
+    term_name,
+    noise_range,
+  ) in lowbody_randomization.JLJLOWBODY_ACTOR_NOISE_RANGES.items():
     if term_name not in actor_terms:
       continue
 
@@ -447,20 +503,34 @@ def test_jljlowbody_foot_swing_height_reward_is_task_local() -> None:
   cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
   reward = cfg.rewards["foot_swing_height"]
 
-  for param_name, param_value in JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS.items():
+  for (
+    param_name,
+    param_value,
+  ) in lowbody_rewards.JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS.items():
     if isinstance(param_value, float):
       assert reward.params[param_name] == pytest.approx(param_value)
     else:
       assert reward.params[param_name] == param_value
 
 
-def test_jljlowbody_velocity_uses_standing_command_curriculum() -> None:
-  """JLJLowBody should keep extra standing and low-speed command coverage."""
+def test_jljlowbody_velocity_disables_standing_command_curriculum_by_default() -> None:
+  """JLJLowBody should use the base command distribution by default."""
   cfg = load_env_cfg("JLJLowBody-Velocity-Flat")
   twist_cmd = cfg.commands["twist"]
   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
 
-  first_stage = JLJLOWBODY_STANDING_COMMAND_STAGES[0]
+  assert twist_cmd.rel_standing_envs == pytest.approx(0.1)
+  assert twist_cmd.rel_low_speed_envs == pytest.approx(0.0)
+  assert "standing_commands" not in cfg.curriculum
+
+
+def test_jljlowbody_velocity_can_enable_standing_command_curriculum() -> None:
+  """JLJLowBody should preserve the optional standing curriculum behavior."""
+  cfg = jljlowbody_flat_env_cfg(use_standing_command_curriculum=True)
+  twist_cmd = cfg.commands["twist"]
+  assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+
+  first_stage = lowbody_curriculums.JLJLOWBODY_STANDING_COMMAND_STAGES[0]
   assert twist_cmd.rel_standing_envs == pytest.approx(first_stage["rel_standing_envs"])
   assert twist_cmd.rel_low_speed_envs == pytest.approx(
     first_stage["rel_low_speed_envs"]
@@ -471,8 +541,10 @@ def test_jljlowbody_velocity_uses_standing_command_curriculum() -> None:
 
   assert "standing_commands" in cfg.curriculum
   curriculum = cfg.curriculum["standing_commands"]
-  assert curriculum.func is velocity_mdp.standing_commands_vel
-  assert curriculum.params["stages"] == JLJLOWBODY_STANDING_COMMAND_STAGES
+  assert curriculum.func is lowbody_curriculums.standing_commands_vel
+  assert curriculum.params["stages"] == (
+    lowbody_curriculums.JLJLOWBODY_STANDING_COMMAND_STAGES
+  )
 
 
 def test_jljlowbody_blind_rough_task_uses_local_blind_terrain_curriculum() -> None:
@@ -483,14 +555,22 @@ def test_jljlowbody_blind_rough_task_uses_local_blind_terrain_curriculum() -> No
   assert cfg.scene.terrain.terrain_generator is not None
   assert cfg.scene.terrain.terrain_generator.curriculum is True
   assert tuple(cfg.scene.terrain.terrain_generator.sub_terrains) == (
-    JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES
+    lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES
   )
-  assert cfg.scene.terrain.terrain_generator.num_rows == JLJLOWBODY_BLIND_ROUGH_NUM_ROWS
-  assert cfg.scene.terrain.terrain_generator.size == JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE
+  assert (
+    cfg.scene.terrain.terrain_generator.num_rows
+    == lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_NUM_ROWS
+  )
+  assert (
+    cfg.scene.terrain.terrain_generator.size
+    == lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE
+  )
   assert "terrain_levels" in cfg.curriculum
-  assert cfg.curriculum["terrain_levels"].func is velocity_mdp.terrain_levels_by_step
+  assert (
+    cfg.curriculum["terrain_levels"].func is lowbody_curriculums.terrain_levels_by_step
+  )
   assert cfg.curriculum["terrain_levels"].params["stages"] == (
-    JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES
+    lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES
   )
   assert cfg.scene.terrain.max_init_terrain_level == 0
 
@@ -545,7 +625,7 @@ def test_step_based_terrain_curriculum_progresses_by_training_step() -> None:
   )
   env = SimpleNamespace(scene=SimpleNamespace(terrain=terrain), common_step_counter=0)
   term_cfg = CurriculumTermCfg(
-    func=velocity_mdp.terrain_levels_by_step,
+    func=lowbody_curriculums.terrain_levels_by_step,
     params={
       "stages": [
         {"step": 0, "min_level": 0, "max_level": 0},
@@ -555,7 +635,7 @@ def test_step_based_terrain_curriculum_progresses_by_training_step() -> None:
   )
 
   mock_env = cast(Any, env)
-  term = velocity_mdp.terrain_levels_by_step(term_cfg, mock_env)
+  term = lowbody_curriculums.terrain_levels_by_step(term_cfg, mock_env)
   state = term(mock_env, torch.arange(4), stages=term_cfg.params["stages"])
 
   assert int(state["stage_max_level"].item()) == 0
@@ -584,7 +664,7 @@ def test_standing_command_curriculum_progresses_by_training_step() -> None:
     common_step_counter=0,
     command_manager=SimpleNamespace(get_term=lambda _name: command_term),
   )
-  stages: list[velocity_mdp.StandingVelocityStage] = [
+  stages: list[lowbody_curriculums.StandingVelocityStage] = [
     {
       "step": 0,
       "rel_standing_envs": 0.4,
@@ -604,7 +684,7 @@ def test_standing_command_curriculum_progresses_by_training_step() -> None:
   ]
 
   mock_env = cast(Any, env)
-  state = velocity_mdp.standing_commands_vel(
+  state = lowbody_curriculums.standing_commands_vel(
     mock_env,
     torch.arange(4),
     command_name="twist",
@@ -617,7 +697,7 @@ def test_standing_command_curriculum_progresses_by_training_step() -> None:
   assert state["rel_standing_envs"].item() == pytest.approx(0.4)
 
   env.common_step_counter = 10
-  state = velocity_mdp.standing_commands_vel(
+  state = lowbody_curriculums.standing_commands_vel(
     mock_env,
     torch.arange(4),
     command_name="twist",

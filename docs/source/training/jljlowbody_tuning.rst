@@ -24,7 +24,11 @@ JLJLowBody 的环境配置在
 
 - ``use_fixed_action_scale``：是否使用统一固定 action scale。
 - ``randomize_pd_gains``：是否开启 PD 增益随机化。
+- ``randomize_ankle_encoder_bias``：是否在 capsule flat 训练任务里额外开启
+  踝关节 encoder bias 随机化。
 - ``use_actuator_delay``：是否开启执行器命令延迟。
+- ``use_standing_command_curriculum``：是否开启后加入的低速稳定性课程，
+  默认是 ``False``。
 - ``include_actor_base_lin_vel``：actor 观测里是否加入 base 线速度。
 - ``play``：回放模式，会关闭训练用扰动、课程等部分配置。
 
@@ -49,7 +53,7 @@ PD 与 PD 随机化
 - ``velocity_limit``：速度相关的力矩饱和上限。
 
 训练时的 PD 随机化在
-``src/mjlab/tasks/velocity/config/jljlowbody/env_cfgs.py`` 中配置：
+``src/mjlab/tasks/velocity/config/jljlowbody/randomization.py`` 中配置：
 
 .. code-block:: python
 
@@ -73,6 +77,28 @@ PD 与 PD 随机化
    cfg = jljlowbody_rough_env_cfg(randomize_pd_gains=False)
 
 
+踝关节 Encoder Bias
+-------------------
+
+``jljlowbody_capsule_flat_env_cfg`` 额外支持踝关节 encoder bias 随机化，
+用于覆盖脚踝装配、标定或建模偏差。默认训练模式开启，``play=True`` 时关闭。
+
+.. code-block:: python
+
+   JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE = (-0.05, 0.05)
+   JLJLOWBODY_ANKLE_JOINT_NAMES = (".*_ankle_.*_joint",)
+
+基础速度环境已经有全关节 ``encoder_bias``，范围是 ``(-0.02, 0.02)``。
+capsule flat 任务会再添加 ``ankle_encoder_bias`` 事件，只匹配左右脚踝
+pitch 和 roll 关节，并把这些关节的 bias 改为上面的更大范围。
+
+关闭示例：
+
+.. code-block:: python
+
+   cfg = jljlowbody_capsule_flat_env_cfg(randomize_ankle_encoder_bias=False)
+
+
 Action Scale
 ------------
 
@@ -84,28 +110,18 @@ action scale 由 ``use_fixed_action_scale`` 控制。默认是 ``True``，使用
    JLJLOWBODY_FIXED_ACTION_SCALE = 0.5
 
 如果把 ``use_fixed_action_scale=False``，则使用
-``jljlowbody_constants.py`` 里的逐关节配置：
+``jljlowbody_constants.py`` 里按 nominal PD 自动计算的逐关节配置：
 
 .. code-block:: python
 
-   JLJLOWBODY_ACTION_SCALE = {
-     "left_hip_pitch_joint": 0.0625,
-     "left_hip_roll_joint": 0.14,
-     "left_hip_yaw_joint": 0.08,
-     "left_knee_joint": 0.0375,
-     "left_ankle_pitch_joint": 0.025,
-     "left_ankle_roll_joint": 0.025,
-     "right_hip_pitch_joint": 0.0625,
-     "right_hip_roll_joint": 0.14,
-     "right_hip_yaw_joint": 0.08,
-     "right_knee_joint": 0.0375,
-     "right_ankle_pitch_joint": 0.025,
-     "right_ankle_roll_joint": 0.025,
-   }
+   scale = 0.25 * effort_limit / stiffness
 
 这里的数值是策略 action 到关节位置 target 的比例。数值越大，
 同样大小的 policy action 会给更大的关节位置目标变化；数值越小，
-动作更保守。
+动作更保守。如果修改 ``JLJLOWBODY_ACTUATORS`` 中的 ``stiffness`` 或
+``effort_limit``，``JLJLOWBODY_ACTION_SCALE`` 会随之更新。训练中的
+``pd_gains`` domain randomization 不会逐环境动态改变 action scale；scale
+对应的是机器人配置里的 nominal PD。
 
 
 关节命令延迟
@@ -226,10 +242,13 @@ JLJLowBody 还有几个常用调参入口都在 ``env_cfgs.py``：
 
 - ``_LINK_MASS_SCALE_RANGE``：link 质量和转动惯量的伪惯量随机化范围。
 - ``JLJLOWBODY_ACTOR_NOISE_RANGES``：actor 观测噪声范围。
+- ``JLJLOWBODY_ANKLE_ENCODER_BIAS_RANGE``：capsule flat 训练任务里的
+  踝关节 encoder bias 随机化范围。
 - ``JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS``：摆脚高度奖励参数。
 - ``JLJLOWBODY_ACTION_ACC_WEIGHT``：二阶 action 突变惩罚权重。
 - ``JLJLOWBODY_AIR_TIME_COMMAND_THRESHOLD``：air time 奖励生效的命令阈值。
-- ``JLJLOWBODY_STANDING_COMMAND_STAGES``：站立和低速命令课程。
+- ``JLJLOWBODY_STANDING_COMMAND_STAGES``：可选的站立和低速命令课程。
+  当前默认关闭，可通过 ``use_standing_command_curriculum=True`` 开启。
 
 基础速度环境里已有一阶动作变化惩罚 ``action_rate_l2``，
 JLJLowBody 额外加入 ``action_acc_l2``，用于惩罚二阶动作突变，

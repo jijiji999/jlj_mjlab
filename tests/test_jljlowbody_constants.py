@@ -68,6 +68,19 @@ def test_jljlowbody_action_scale_is_per_joint() -> None:
   )
 
 
+def test_jljlowbody_action_scale_is_computed_from_pd() -> None:
+  for actuator_cfg in jljlowbody_constants.JLJLOWBODY_ACTUATORS:
+    (joint_name,) = actuator_cfg.target_names_expr
+    expected = (
+      jljlowbody_constants.JLJLOWBODY_ACTION_SCALE_GAIN
+      * actuator_cfg.effort_limit
+      / actuator_cfg.stiffness
+    )
+    assert jljlowbody_constants.JLJLOWBODY_ACTION_SCALE[joint_name] == pytest.approx(
+      expected
+    )
+
+
 def test_jljlowbody_actuators_have_uniform_small_command_delay() -> None:
   for actuator_cfg in jljlowbody_constants.JLJLOWBODY_ACTUATORS:
     assert actuator_cfg.delay_min_lag == jljlowbody_constants.JLJLOWBODY_DELAY_MIN_LAG

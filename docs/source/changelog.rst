@@ -66,6 +66,8 @@ Added
   during policy checks.
 - Added JLJLowBody tuning documentation covering PD randomization, action scale,
   actuator delay, foot contact parameters, terrain setup, and related rewards.
+- Added capsule-flat JLJLowBody ankle encoder-bias randomization with a
+  ``randomize_ankle_encoder_bias`` factory toggle.
 
 Changed
 ^^^^^^^
@@ -88,6 +90,8 @@ Changed
   without affecting other velocity tasks.
 - JLJLowBody velocity tasks now use a standing-command curriculum with extra
   zero and near-zero velocity samples to improve stationary stability.
+- JLJLowBody adaptive action scales are now computed from nominal PD settings
+  using ``0.25 * effort_limit / stiffness`` instead of hand-maintained values.
 - JLJLowBody joint actuators now use ``DcMotorActuatorCfg`` with
   velocity-based torque saturation, so their configured ``velocity_limit``
   affects training and playback instead of being ignored by a position-only
@@ -99,6 +103,9 @@ Changed
   enabling or disabling per-joint command-delay randomization.
 - JLJLowBody velocity tasks now add a small ``action_acc_l2`` penalty to
   discourage second-order action jumps and reduce command jitter.
+- JLJLowBody velocity tasks now disable the optional standing and near-zero-speed
+  command curriculum by default. It remains available through the
+  ``use_standing_command_curriculum`` factory argument.
 - ``JLJLowBody-Velocity-Blind-Rough`` now uses a step-based terrain curriculum,
   mirroring velocity-stage progression instead of performance-based terrain
   promotion.

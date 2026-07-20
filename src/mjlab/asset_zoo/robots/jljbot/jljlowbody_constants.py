@@ -123,17 +123,17 @@ JLJLOWBODY_ACTUATOR_LEFT_KNEE = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_ANKLE_PITCH = _make_jljlowbody_actuator(
   "left_ankle_pitch_joint",
-  stiffness=75.0,  # 150
+  stiffness=20.0,  # 150
   damping=5.0,
-  effort_limit=15.0,  # 12
+  effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
 JLJLOWBODY_ACTUATOR_LEFT_ANKLE_ROLL = _make_jljlowbody_actuator(
   "left_ankle_roll_joint",
-  stiffness=75.0,  # 150
+  stiffness=20.0,  # 150
   damping=5.0,
-  effort_limit=15.0,  # 12
+  effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
@@ -171,17 +171,17 @@ JLJLOWBODY_ACTUATOR_RIGHT_KNEE = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_PITCH = _make_jljlowbody_actuator(
   "right_ankle_pitch_joint",
-  stiffness=75.0,  # 150
+  stiffness=20.0,  # 150
   damping=5.0,
-  effort_limit=15.0,  # 12
+  effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
 JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_ROLL = _make_jljlowbody_actuator(
   "right_ankle_roll_joint",
-  stiffness=75.0,  # 150
+  stiffness=20.0,  # 150
   damping=5.0,
-  effort_limit=15.0,  # 12
+  effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
@@ -200,6 +200,22 @@ JLJLOWBODY_ACTUATORS: tuple[DcMotorActuatorCfg, ...] = (
   JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_PITCH,
   JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_ROLL,
 )
+
+JLJLOWBODY_ACTION_SCALE_GAIN = 0.25
+
+
+def _compute_jljlowbody_action_scale(
+  actuators: tuple[DcMotorActuatorCfg, ...],
+) -> dict[str, float]:
+  """Compute joint-position action scales from nominal PD actuator settings."""
+  action_scale: dict[str, float] = {}
+  for actuator in actuators:
+    (joint_name,) = actuator.target_names_expr
+    action_scale[joint_name] = (
+      JLJLOWBODY_ACTION_SCALE_GAIN * actuator.effort_limit / actuator.stiffness
+    )
+  return action_scale
+
 
 ##
 # Keyframe config.
@@ -327,20 +343,9 @@ def get_jljlowbody_capsule_robot_cfg(enable_actuator_delay: bool = True) -> Enti
   )
 
 
-JLJLOWBODY_ACTION_SCALE: dict[str, float] = {
-  "left_hip_pitch_joint": 0.0625,
-  "left_hip_roll_joint": 0.14,
-  "left_hip_yaw_joint": 0.08,
-  "left_knee_joint": 0.0375,
-  "left_ankle_pitch_joint": 0.025,
-  "left_ankle_roll_joint": 0.025,
-  "right_hip_pitch_joint": 0.0625,
-  "right_hip_roll_joint": 0.14,
-  "right_hip_yaw_joint": 0.08,
-  "right_knee_joint": 0.0375,
-  "right_ankle_pitch_joint": 0.025,
-  "right_ankle_roll_joint": 0.025,
-}
+JLJLOWBODY_ACTION_SCALE: dict[str, float] = _compute_jljlowbody_action_scale(
+  JLJLOWBODY_ACTUATORS
+)
 
 
 if __name__ == "__main__":

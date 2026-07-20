@@ -268,6 +268,37 @@ def feet_clearance(
   return cost
 
 
+def feet_gait(
+  env: ManagerBasedRlEnv,
+  period: float,
+  offset: list[float],
+  threshold: float,
+  command_threshold: float,
+  command_name: str,
+  sensor_name: str,
+) -> torch.Tensor:
+  """Reward matching foot contacts to a periodic gait phase."""
+  sensor: ContactSensor = env.scene[sensor_name]
+  current_contact_time = sensor.data.current_contact_time
+  assert current_contact_time is not None
+
+  is_contact = current_contact_time > 0.0
+  global_phase = ((env.episode_length_buf * env.step_dt) / period).unsqueeze(1)
+  offsets = torch.as_tensor(offset, device=env.device, dtype=global_phase.dtype).view(
+    1, -1
+  )
+  leg_phase = (global_phase + offsets) % 1.0
+  is_stance = leg_phase < threshold
+  reward = (is_stance == is_contact).float().mean(dim=1)
+
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+  linear_norm = torch.norm(command[:, :2], dim=1)
+  angular_norm = torch.abs(command[:, 2])
+  total_command = linear_norm + angular_norm
+  return reward * (total_command > command_threshold).float()
+
+
 class feet_swing_height:
   """Penalize deviation from target swing height, evaluated at landing."""
 

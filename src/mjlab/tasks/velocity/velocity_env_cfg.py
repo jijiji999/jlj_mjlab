@@ -335,9 +335,9 @@ def make_velocity_env_cfg(
     ),
     "foot_clearance": RewardTermCfg(
       func=mdp.feet_clearance,
-      weight=-2.0,
+      weight=-2.2,
       params={
-        "target_height": 0.1,
+        "target_height": 0.2,
         "height_sensor_name": "foot_height_scan",
         "command_name": "twist",
         "command_threshold": 0.05,
@@ -406,9 +406,9 @@ def make_velocity_env_cfg(
       params={
         "command_name": "twist",
         "velocity_stages": [
-          {"step": 0, "lin_vel_x": (0.8, 0.8), "ang_vel_z": (-0.5, 0.5)},
-          {"step": 20000 * 24, "lin_vel_x": (-1.2, 1.5), "ang_vel_z": (-0.7, 0.7)},
-          {"step": 40000 * 24, "lin_vel_x": (-1.7, 2.2)},
+          {"step": 0, "lin_vel_x": (0.8, 1.0), "ang_vel_z": (-0.5, 0.5)},
+          {"step": 15000 * 24, "lin_vel_x": (-1.1, 1.5), "ang_vel_z": (-0.7, 0.7)},
+          {"step": 30000 * 24, "lin_vel_x": (-1.5, 2.0)},
         ],
       },
     ),

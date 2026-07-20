@@ -45,3 +45,17 @@ def foot_contact_forces(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tenso
   assert sensor_data.force is not None
   forces_flat = sensor_data.force.flatten(start_dim=1)  # [B, N*3]
   return torch.sign(forces_flat) * torch.log1p(torch.abs(forces_flat))
+
+
+def phase(env: ManagerBasedRlEnv, period: float, command_name: str) -> torch.Tensor:
+  """Periodic gait phase observation, zeroed while standing."""
+  command = env.command_manager.get_command(command_name)
+  assert command is not None, f"Command '{command_name}' not found."
+
+  global_phase = (env.episode_length_buf * env.step_dt) % period / period
+  phase_obs = torch.zeros(env.num_envs, 2, device=env.device)
+  phase_obs[:, 0] = torch.sin(global_phase * torch.pi * 2.0)
+  phase_obs[:, 1] = torch.cos(global_phase * torch.pi * 2.0)
+
+  stand_mask = torch.linalg.norm(command, dim=1) < 0.1
+  return torch.where(stand_mask.unsqueeze(1), torch.zeros_like(phase_obs), phase_obs)

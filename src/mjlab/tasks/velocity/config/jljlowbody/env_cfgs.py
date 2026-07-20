@@ -1,8 +1,5 @@
 """Standalone JLJLowBody velocity environment configurations."""
 
-import math
-from copy import deepcopy
-
 from mjlab.asset_zoo.robots import (
   JLJLOWBODY_ACTION_SCALE,
   JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES,
@@ -12,12 +9,11 @@ from mjlab.asset_zoo.robots import (
 )
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs import mdp as envs_mdp
-from mjlab.envs.mdp import dr
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.event_manager import EventTermCfg
+from mjlab.managers.observation_manager import ObservationTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
-from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import (
   ContactMatch,
   ContactSensorCfg,
@@ -27,80 +23,19 @@ from mjlab.sensor import (
   TerrainHeightSensorCfg,
 )
 from mjlab.tasks.velocity import mdp
-from mjlab.tasks.velocity.config.jljbot import rewards as jljbot_rewards
+from mjlab.tasks.velocity.config.jljlowbody import curriculums as lowbody_curriculums
+from mjlab.tasks.velocity.config.jljlowbody import (
+  randomization as lowbody_randomization,
+)
+from mjlab.tasks.velocity.config.jljlowbody import rewards as lowbody_rewards
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.tasks.velocity.velocity_env_cfg import make_velocity_env_cfg
 from mjlab.terrains.config import flat, random_rough
 from mjlab.terrains.terrain_generator import TerrainGeneratorCfg
-from mjlab.utils.noise import UniformNoiseCfg as Unoise
 
-_LINK_MASS_SCALE_RANGE = (0.9, 1.1)
-_LINK_MASS_ALPHA_RANGE = (
-  0.5 * math.log(_LINK_MASS_SCALE_RANGE[0]),
-  0.5 * math.log(_LINK_MASS_SCALE_RANGE[1]),
-)
 _LOWBODY_FOOT_SITE_NAMES = ("left_foot", "right_foot")
 
 JLJLOWBODY_FIXED_ACTION_SCALE = 0.5
-JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE = (0.8, 1.2)
-JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE = (0.9, 1.1)
-JLJLOWBODY_ACTION_ACC_WEIGHT = -0.02
-JLJLOWBODY_AIR_TIME_COMMAND_THRESHOLD = 0.2
-JLJLOWBODY_ACTOR_NOISE_RANGES: dict[str, tuple[float, float] | None] = {
-  # Tune these per-term ranges here without affecting other velocity tasks.
-  "base_lin_vel": (-0.5, 0.5),
-  "base_ang_vel": (-0.2, 0.2),
-  "projected_gravity": (-0.08, 0.08),
-  "joint_pos": (-0.04, 0.04),
-  "joint_vel": (-1.5, 1.5),
-  "height_scan": (-0.1, 0.1),
-}
-JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS: dict[str, str | float] = {
-  # Tune this reward locally for JLJLowBody without touching other tasks.
-  "sensor_name": "feet_ground_contact",
-  "height_sensor_name": "foot_height_scan",
-  "target_height": 0.15,
-  "command_name": "twist",
-  "command_threshold": 0.05,
-}
-JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE = (6.0, 6.0)
-JLJLOWBODY_BLIND_ROUGH_NUM_ROWS = 6
-JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES = (
-  "flat",
-  "random_rough_low",
-)
-JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES: list[mdp.TerrainLevelStage] = [
-  {"step": 0, "min_level": 0, "max_level": 0},
-  {"step": 10000 * 24, "min_level": 0, "max_level": 1},
-  {"step": 20000 * 24, "min_level": 1, "max_level": 3},
-  {"step": 50000 * 24, "min_level": 2, "max_level": 5},
-]
-JLJLOWBODY_STANDING_COMMAND_STAGES: list[mdp.StandingVelocityStage] = [
-  {
-    "step": 0,
-    "rel_standing_envs": 0.35,
-    "rel_low_speed_envs": 0.2,
-    "low_speed_lin_vel_x": (-0.04, 0.04),
-    "low_speed_lin_vel_y": (-0.04, 0.04),
-    "low_speed_ang_vel_z": (-0.04, 0.04),
-  },
-  {
-    "step": 20000 * 24,
-    "rel_standing_envs": 0.25,
-    "rel_low_speed_envs": 0.15,
-    "low_speed_lin_vel_x": (-0.05, 0.05),
-    "low_speed_lin_vel_y": (-0.05, 0.05),
-    "low_speed_ang_vel_z": (-0.05, 0.05),
-  },
-  {
-    "step": 40000 * 24,
-    "rel_standing_envs": 0.15,
-    "rel_low_speed_envs": 0.1,
-    "low_speed_lin_vel_x": (-0.06, 0.06),
-    "low_speed_lin_vel_y": (-0.06, 0.06),
-    "low_speed_ang_vel_z": (-0.06, 0.06),
-  },
-]
 
 
 def _get_jljlowbody_action_scale(
@@ -112,26 +47,6 @@ def _get_jljlowbody_action_scale(
   return JLJLOWBODY_ACTION_SCALE
 
 
-def _apply_jljlowbody_actor_noise_overrides(cfg: ManagerBasedRlEnvCfg) -> None:
-  """Detach actor observation terms and apply JLJLowBody-local noise settings."""
-  actor_group = cfg.observations["actor"]
-  actor_terms = dict(actor_group.terms)
-
-  for term_name, noise_range in JLJLOWBODY_ACTOR_NOISE_RANGES.items():
-    if term_name not in actor_terms:
-      continue
-
-    term_cfg = deepcopy(actor_terms[term_name])
-    term_cfg.noise = (
-      None
-      if noise_range is None
-      else Unoise(n_min=noise_range[0], n_max=noise_range[1])
-    )
-    actor_terms[term_name] = term_cfg
-
-  actor_group.terms = actor_terms
-
-
 def _remove_terrain_scan_observations(cfg: ManagerBasedRlEnvCfg) -> None:
   """Make the task blind to terrain height by dropping terrain scan observations."""
   cfg.scene.sensors = tuple(
@@ -141,13 +56,60 @@ def _remove_terrain_scan_observations(cfg: ManagerBasedRlEnvCfg) -> None:
   cfg.observations["critic"].terms.pop("height_scan", None)
 
 
+def _insert_observation_after(
+  terms: dict[str, ObservationTermCfg],
+  anchor: str,
+  name: str,
+  term: ObservationTermCfg,
+) -> dict[str, ObservationTermCfg]:
+  """Return observation terms with ``term`` inserted after ``anchor``."""
+  if name in terms:
+    return terms
+
+  updated: dict[str, ObservationTermCfg] = {}
+  inserted = False
+  for term_name, term_cfg in terms.items():
+    updated[term_name] = term_cfg
+    if term_name == anchor:
+      updated[name] = term
+      inserted = True
+
+  if not inserted:
+    updated[name] = term
+  return updated
+
+
+def _add_capsule_flat_phase_gait_terms(cfg: ManagerBasedRlEnvCfg) -> None:
+  """Add gait phase observation and matching contact reward for capsule-flat."""
+  phase_term = ObservationTermCfg(
+    func=mdp.phase,
+    params={
+      "period": lowbody_rewards.JLJLOWBODY_GAIT_PHASE_PERIOD,
+      "command_name": "twist",
+    },
+  )
+  for group_name in ("actor", "critic"):
+    cfg.observations[group_name].terms = _insert_observation_after(
+      cfg.observations[group_name].terms,
+      anchor="command",
+      name="phase",
+      term=phase_term,
+    )
+
+  cfg.rewards["foot_gait"] = RewardTermCfg(
+    func=mdp.feet_gait,
+    weight=lowbody_rewards.JLJLOWBODY_FOOT_GAIT_WEIGHT,
+    params=lowbody_rewards.JLJLOWBODY_FOOT_GAIT_PARAMS,
+  )
+
+
 def _make_jljlowbody_blind_rough_terrain_cfg(play: bool) -> TerrainGeneratorCfg:
   """Build a light undulating-terrain curriculum for blind rough walking."""
   terrain_cfg = TerrainGeneratorCfg(
-    size=JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE,
+    size=lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_TERRAIN_SIZE,
     border_width=20.0,
-    num_rows=JLJLOWBODY_BLIND_ROUGH_NUM_ROWS,
-    num_cols=len(JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES),
+    num_rows=lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_NUM_ROWS,
+    num_cols=len(lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_TERRAIN_TYPES),
     curriculum=True,
     sub_terrains={
       "flat": flat(proportion=0.3),
@@ -182,6 +144,7 @@ def _customize_jljlowbody_cfg(
   use_capsule_feet: bool = False,
   randomize_pd_gains: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Apply JLJLowBody-specific velocity task customizations."""
   cfg.sim.mujoco.ccd_iterations = 500
@@ -247,57 +210,40 @@ def _customize_jljlowbody_cfg(
   joint_pos_action = cfg.actions["joint_pos"]
   assert isinstance(joint_pos_action, JointPositionActionCfg)
   joint_pos_action.scale = _get_jljlowbody_action_scale(use_fixed_action_scale)
-  _apply_jljlowbody_actor_noise_overrides(cfg)
+  lowbody_randomization.apply_actor_noise_overrides(cfg)
 
   cfg.viewer.body_name = "base_link"
 
   twist_cmd = cfg.commands["twist"]
   assert isinstance(twist_cmd, UniformVelocityCommandCfg)
   twist_cmd.viz.z_offset = 1.15
-  standing_stage = JLJLOWBODY_STANDING_COMMAND_STAGES[0]
-  low_speed_lin_vel_x = standing_stage["low_speed_lin_vel_x"]
-  low_speed_lin_vel_y = standing_stage["low_speed_lin_vel_y"]
-  low_speed_ang_vel_z = standing_stage["low_speed_ang_vel_z"]
-  assert low_speed_lin_vel_x is not None
-  assert low_speed_lin_vel_y is not None
-  assert low_speed_ang_vel_z is not None
-  twist_cmd.rel_standing_envs = standing_stage["rel_standing_envs"]
-  twist_cmd.rel_low_speed_envs = standing_stage["rel_low_speed_envs"]
-  twist_cmd.low_speed_ranges.lin_vel_x = low_speed_lin_vel_x
-  twist_cmd.low_speed_ranges.lin_vel_y = low_speed_lin_vel_y
-  twist_cmd.low_speed_ranges.ang_vel_z = low_speed_ang_vel_z
-  cfg.curriculum["standing_commands"] = CurriculumTermCfg(
-    func=mdp.standing_commands_vel,
-    params={
-      "command_name": "twist",
-      "stages": JLJLOWBODY_STANDING_COMMAND_STAGES,
-    },
-  )
-
-  cfg.events["foot_friction"].params["asset_cfg"].geom_names = foot_collision_names
-  cfg.events["base_com"].params["asset_cfg"].body_names = ("base_link",)
-  base_com_event = cfg.events.pop("base_com")
-  cfg.events["link_pseudo_inertia"] = EventTermCfg(
-    mode="startup",
-    func=dr.pseudo_inertia,
-    params={
-      "asset_cfg": SceneEntityCfg("robot", body_names=(".*",)),
-      # dr.pseudo_inertia scales mass and inertia by exp(2 * alpha).
-      "alpha_range": _LINK_MASS_ALPHA_RANGE,
-    },
-  )
-  if randomize_pd_gains and not play:
-    cfg.events["pd_gains"] = EventTermCfg(
-      mode="startup",
-      func=dr.pd_gains,
+  if use_standing_command_curriculum:
+    standing_stage = lowbody_curriculums.JLJLOWBODY_STANDING_COMMAND_STAGES[0]
+    low_speed_lin_vel_x = standing_stage["low_speed_lin_vel_x"]
+    low_speed_lin_vel_y = standing_stage["low_speed_lin_vel_y"]
+    low_speed_ang_vel_z = standing_stage["low_speed_ang_vel_z"]
+    assert low_speed_lin_vel_x is not None
+    assert low_speed_lin_vel_y is not None
+    assert low_speed_ang_vel_z is not None
+    twist_cmd.rel_standing_envs = standing_stage["rel_standing_envs"]
+    twist_cmd.rel_low_speed_envs = standing_stage["rel_low_speed_envs"]
+    twist_cmd.low_speed_ranges.lin_vel_x = low_speed_lin_vel_x
+    twist_cmd.low_speed_ranges.lin_vel_y = low_speed_lin_vel_y
+    twist_cmd.low_speed_ranges.ang_vel_z = low_speed_ang_vel_z
+    cfg.curriculum["standing_commands"] = CurriculumTermCfg(
+      func=lowbody_curriculums.standing_commands_vel,
       params={
-        "asset_cfg": SceneEntityCfg("robot", actuator_names=".*"),
-        "kp_range": JLJLOWBODY_PD_RANDOMIZATION_KP_RANGE,
-        "kd_range": JLJLOWBODY_PD_RANDOMIZATION_KD_RANGE,
-        "operation": "scale",
+        "command_name": "twist",
+        "stages": lowbody_curriculums.JLJLOWBODY_STANDING_COMMAND_STAGES,
       },
     )
-  cfg.events["base_com"] = base_com_event
+
+  lowbody_randomization.apply_domain_randomization(
+    cfg,
+    foot_collision_names=foot_collision_names,
+    randomize_pd_gains=randomize_pd_gains,
+    play=play,
+  )
 
   cfg.rewards["pose"].params["std_standing"] = {".*": 0.03}
   cfg.rewards["pose"].params["std_walking"] = {
@@ -327,13 +273,15 @@ def _customize_jljlowbody_cfg(
   cfg.rewards["angular_momentum"].weight = -0.02
   cfg.rewards["action_acc_l2"] = RewardTermCfg(
     func=mdp.action_acc_l2,
-    weight=JLJLOWBODY_ACTION_ACC_WEIGHT,
+    weight=lowbody_rewards.JLJLOWBODY_ACTION_ACC_WEIGHT,
   )
-  cfg.rewards["air_time"].weight = 0.05
+  cfg.rewards["air_time"].weight = 0.1
   cfg.rewards["air_time"].params["command_threshold"] = (
-    JLJLOWBODY_AIR_TIME_COMMAND_THRESHOLD
+    lowbody_rewards.JLJLOWBODY_AIR_TIME_COMMAND_THRESHOLD
   )
-  cfg.rewards["foot_swing_height"].params.update(JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS)
+  cfg.rewards["foot_swing_height"].params.update(
+    lowbody_rewards.JLJLOWBODY_FOOT_SWING_HEIGHT_PARAMS
+  )
 
   cfg.rewards["self_collisions"] = RewardTermCfg(
     func=mdp.self_collision_cost,
@@ -341,18 +289,18 @@ def _customize_jljlowbody_cfg(
     params={"sensor_name": self_collision_cfg.name, "force_threshold": 10.0},
   )
   cfg.rewards["hip_roll_deviation"] = RewardTermCfg(
-    func=jljbot_rewards.hip_roll_initial_deviation_l2,
-    weight=-0.4,
+    func=lowbody_rewards.hip_roll_initial_deviation_l2,
+    weight=-0.2,
     params={"std": 0.3},
   )
   cfg.rewards["hip_pitch_deviation"] = RewardTermCfg(
-    func=jljbot_rewards.hip_pitch_initial_deviation_l2,
-    weight=-0.1,
+    func=lowbody_rewards.hip_pitch_initial_deviation_l2,
+    weight=-0.05,
     params={"std": 0.3},
   )
   cfg.rewards["hip_yaw_deviation"] = RewardTermCfg(
-    func=jljbot_rewards.hip_yaw_initial_deviation_l2,
-    weight=-0.15,
+    func=lowbody_rewards.hip_yaw_initial_deviation_l2,
+    weight=-0.10,
     params={"std": 0.3},
   )
 
@@ -390,6 +338,7 @@ def jljlowbody_rough_env_cfg(
   use_capsule_feet: bool = False,
   randomize_pd_gains: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Create JLJLowBody rough terrain velocity configuration."""
   cfg = make_velocity_env_cfg(include_actor_base_lin_vel=include_actor_base_lin_vel)
@@ -400,6 +349,7 @@ def jljlowbody_rough_env_cfg(
     use_capsule_feet=use_capsule_feet,
     randomize_pd_gains=randomize_pd_gains,
     use_actuator_delay=use_actuator_delay,
+    use_standing_command_curriculum=use_standing_command_curriculum,
   )
 
 
@@ -410,6 +360,7 @@ def jljlowbody_flat_env_cfg(
   use_capsule_feet: bool = False,
   randomize_pd_gains: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Create JLJLowBody flat terrain velocity configuration."""
   cfg = jljlowbody_rough_env_cfg(
@@ -419,6 +370,7 @@ def jljlowbody_flat_env_cfg(
     use_capsule_feet=use_capsule_feet,
     randomize_pd_gains=randomize_pd_gains,
     use_actuator_delay=use_actuator_delay,
+    use_standing_command_curriculum=use_standing_command_curriculum,
   )
 
   cfg.sim.njmax = 300
@@ -451,6 +403,7 @@ def jljlowbody_blind_rough_env_cfg(
   use_capsule_feet: bool = False,
   randomize_pd_gains: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Create blind JLJLowBody rough terrain velocity configuration."""
   cfg = jljlowbody_rough_env_cfg(
@@ -460,6 +413,7 @@ def jljlowbody_blind_rough_env_cfg(
     use_capsule_feet=use_capsule_feet,
     randomize_pd_gains=randomize_pd_gains,
     use_actuator_delay=use_actuator_delay,
+    use_standing_command_curriculum=use_standing_command_curriculum,
   )
 
   assert cfg.scene.terrain is not None
@@ -468,8 +422,8 @@ def jljlowbody_blind_rough_env_cfg(
   _remove_terrain_scan_observations(cfg)
   if not play:
     cfg.curriculum["terrain_levels"] = CurriculumTermCfg(
-      func=mdp.terrain_levels_by_step,
-      params={"stages": JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES},
+      func=lowbody_curriculums.terrain_levels_by_step,
+      params={"stages": lowbody_curriculums.JLJLOWBODY_BLIND_ROUGH_TERRAIN_STAGES},
     )
 
   return cfg
@@ -481,6 +435,7 @@ def jljlowbody_capsule_rough_env_cfg(
   use_fixed_action_scale: bool = True,
   randomize_pd_gains: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Create JLJLowBody rough velocity config with capsule foot collisions."""
   return jljlowbody_rough_env_cfg(
@@ -490,25 +445,33 @@ def jljlowbody_capsule_rough_env_cfg(
     use_capsule_feet=True,
     randomize_pd_gains=randomize_pd_gains,
     use_actuator_delay=use_actuator_delay,
+    use_standing_command_curriculum=use_standing_command_curriculum,
   )
 
 
 def jljlowbody_capsule_flat_env_cfg(
   play: bool = False,
   include_actor_base_lin_vel: bool = False,
-  use_fixed_action_scale: bool = True,
+  use_fixed_action_scale: bool = False,
   randomize_pd_gains: bool = True,
+  randomize_ankle_encoder_bias: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Create JLJLowBody flat velocity config with capsule foot collisions."""
-  return jljlowbody_flat_env_cfg(
+  cfg = jljlowbody_flat_env_cfg(
     play=play,
     include_actor_base_lin_vel=include_actor_base_lin_vel,
     use_fixed_action_scale=use_fixed_action_scale,
     use_capsule_feet=True,
     randomize_pd_gains=randomize_pd_gains,
     use_actuator_delay=use_actuator_delay,
+    use_standing_command_curriculum=use_standing_command_curriculum,
   )
+  _add_capsule_flat_phase_gait_terms(cfg)
+  if randomize_ankle_encoder_bias:
+    lowbody_randomization.apply_ankle_encoder_bias_randomization(cfg, play=play)
+  return cfg
 
 
 def jljlowbody_capsule_blind_rough_env_cfg(
@@ -517,6 +480,7 @@ def jljlowbody_capsule_blind_rough_env_cfg(
   use_fixed_action_scale: bool = True,
   randomize_pd_gains: bool = True,
   use_actuator_delay: bool = True,
+  use_standing_command_curriculum: bool = False,
 ) -> ManagerBasedRlEnvCfg:
   """Create blind rough JLJLowBody config with capsule foot collisions."""
   return jljlowbody_blind_rough_env_cfg(
@@ -526,4 +490,5 @@ def jljlowbody_capsule_blind_rough_env_cfg(
     use_capsule_feet=True,
     randomize_pd_gains=randomize_pd_gains,
     use_actuator_delay=use_actuator_delay,
+    use_standing_command_curriculum=use_standing_command_curriculum,
   )
