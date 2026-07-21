@@ -222,7 +222,7 @@ def _compute_jljlowbody_action_scale(
 ##
 
 INIT_STATE = EntityCfg.InitialStateCfg(
-  pos=(0.0, 0.0, 1),
+  pos=(0.0, 0.0, 1.05),
   joint_pos={
     "left_hip_pitch_joint": -0.12,
     "right_hip_pitch_joint": 0.12,

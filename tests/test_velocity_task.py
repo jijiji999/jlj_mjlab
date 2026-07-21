@@ -638,6 +638,30 @@ def test_jljlowbody_capsule_tasks_use_separate_experiment_names() -> None:
   assert blind_rl_cfg.experiment_name == "jljlowbody_capsule_blind_rough_velocity"
 
 
+def test_lowbodynormal_uses_capsule_feet_and_flat_setup() -> None:
+  """LowBodyNormal should mirror the reference flat task on the capsule model."""
+  cfg = load_env_cfg("lowbodynormal")
+
+  assert cfg.scene.terrain is not None
+  assert cfg.scene.terrain.terrain_type == "plane"
+  assert cfg.scene.terrain.terrain_generator is None
+
+  sensor_names = {sensor.name for sensor in (cfg.scene.sensors or ())}
+  assert "terrain_scan" not in sensor_names
+  assert "feet_ground_contact" in sensor_names
+  assert "self_collision" in sensor_names
+
+  assert cfg.events["foot_friction"].params["asset_cfg"].geom_names == (
+    JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES
+  )
+  joint_pos_action = cfg.actions["joint_pos"]
+  assert isinstance(joint_pos_action, JointPositionActionCfg)
+  assert joint_pos_action.scale == JLJLOWBODY_ACTION_SCALE
+
+  rl_cfg = load_rl_cfg("lowbodynormal")
+  assert rl_cfg.experiment_name == "lowbodynormal_velocity"
+
+
 def test_step_based_terrain_curriculum_progresses_by_training_step() -> None:
   """Step-based terrain curriculum should widen the sampled terrain levels."""
   terrain = SimpleNamespace(

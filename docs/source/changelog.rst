@@ -71,6 +71,8 @@ Added
 - Added ``dr.geom_solref`` and ``dr.geom_solimp`` contact-parameter
   randomization, and enabled capsule-flat JLJLowBody foot contact softness
   randomization through ``randomize_foot_contact_softness``.
+- Added ``lowbodynormal``, a standalone flat velocity task backed by the
+  ``lowbody_capsule.xml`` model and the model's capsule foot collision geoms.
 
 Changed
 ^^^^^^^

@@ -201,6 +201,31 @@ def test_jljlowbody_capsule_foot_collision_parameters(
   )
 
 
+def test_jljlowbody_capsule_initial_feet_start_above_ground(
+  jljlowbody_capsule_model,
+) -> None:
+  data = mujoco.MjData(jljlowbody_capsule_model)
+  mujoco.mj_resetDataKeyframe(jljlowbody_capsule_model, data, 0)
+  mujoco.mj_forward(jljlowbody_capsule_model, data)
+
+  min_foot_bottom = np.inf
+  for geom_name in jljlowbody_constants.JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES:
+    geom = jljlowbody_capsule_model.geom(geom_name)
+    geom_xmat = data.geom_xmat[geom.id].reshape(3, 3)
+    capsule_axis = geom_xmat[:, 2]
+    capsule_radius = jljlowbody_capsule_model.geom_size[geom.id, 0]
+    capsule_half_length = jljlowbody_capsule_model.geom_size[geom.id, 1]
+    geom_center = data.geom_xpos[geom.id]
+    end_a = geom_center - capsule_axis * capsule_half_length
+    end_b = geom_center + capsule_axis * capsule_half_length
+    min_foot_bottom = min(
+      min_foot_bottom,
+      float(min(end_a[2], end_b[2]) - capsule_radius),
+    )
+
+  assert min_foot_bottom > 0.0
+
+
 def test_jljlowbody_builtin_sensor_targets(jljlowbody_model) -> None:
   imu_site_id = jljlowbody_model.site(jljlowbody_constants.JLJLOWBODY_IMU_SITE).id
   base_body_id = jljlowbody_model.body("base_link").id
