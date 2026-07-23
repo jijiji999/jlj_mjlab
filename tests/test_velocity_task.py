@@ -35,6 +35,10 @@ from mjlab.tasks.velocity.config.jljlowbody.env_cfgs import (
   JLJLOWBODY_FIXED_ACTION_SCALE,
   jljlowbody_flat_env_cfg,
 )
+from mjlab.tasks.velocity.config.lowbodynormal.env_cfgs import (
+  LOWBODYNORMAL_BODY_MASS_SCALE_RANGE,
+  lowbodynormal_flat_env_cfg,
+)
 from mjlab.tasks.velocity.mdp import UniformVelocityCommandCfg
 from mjlab.utils.noise import UniformNoiseCfg
 
@@ -660,6 +664,44 @@ def test_lowbodynormal_uses_capsule_feet_and_flat_setup() -> None:
 
   rl_cfg = load_rl_cfg("lowbodynormal")
   assert rl_cfg.experiment_name == "lowbodynormal_velocity"
+
+
+def test_lowbodynormal_body_mass_randomization_is_configurable() -> None:
+  """LowBodyNormal can opt into link mass randomization with a scale range."""
+  cfg = load_env_cfg("lowbodynormal")
+
+  assert "link_pseudo_inertia" not in cfg.events
+
+  custom_range = (0.7, 1.4)
+  randomized_cfg = lowbodynormal_flat_env_cfg(
+    randomize_body_mass=True,
+    body_mass_scale_range=custom_range,
+  )
+
+  event_names = list(randomized_cfg.events)
+  assert "link_pseudo_inertia" in randomized_cfg.events
+  assert event_names.index("link_pseudo_inertia") < event_names.index("base_com")
+
+  event = randomized_cfg.events["link_pseudo_inertia"]
+  assert event.mode == "startup"
+  assert event.func is dr.pseudo_inertia
+  assert event.params["asset_cfg"].body_names == (".*",)
+  assert event.params["alpha_range"] == pytest.approx(
+    (0.5 * math.log(custom_range[0]), 0.5 * math.log(custom_range[1]))
+  )
+
+
+def test_lowbodynormal_body_mass_randomization_uses_default_range() -> None:
+  """LowBodyNormal mass randomization uses its named default scale range."""
+  cfg = lowbodynormal_flat_env_cfg(randomize_body_mass=True)
+  event = cfg.events["link_pseudo_inertia"]
+
+  assert event.params["alpha_range"] == pytest.approx(
+    (
+      0.5 * math.log(LOWBODYNORMAL_BODY_MASS_SCALE_RANGE[0]),
+      0.5 * math.log(LOWBODYNORMAL_BODY_MASS_SCALE_RANGE[1]),
+    )
+  )
 
 
 def test_step_based_terrain_curriculum_progresses_by_training_step() -> None:

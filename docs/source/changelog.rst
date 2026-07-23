@@ -73,6 +73,10 @@ Added
   randomization through ``randomize_foot_contact_softness``.
 - Added ``lowbodynormal``, a standalone flat velocity task backed by the
   ``lowbody_capsule.xml`` model and the model's capsule foot collision geoms.
+- Added configurable ``lowbodynormal`` link mass randomization with a factory
+  toggle and direct mass scale range.
+- Added ``export-policy`` for exporting a selected RL checkpoint to an ONNX
+  policy without rerunning training.
 
 Changed
 ^^^^^^^

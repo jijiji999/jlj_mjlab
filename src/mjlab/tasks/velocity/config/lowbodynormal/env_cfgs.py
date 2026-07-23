@@ -40,6 +40,21 @@ from mjlab.viewer import ViewerConfig
 
 _FOOT_SITE_NAMES = ("left_foot", "right_foot")
 _BASE_BODY_NAME = "base_link"
+LOWBODYNORMAL_BODY_MASS_SCALE_RANGE = (0.9, 1.2)
+
+
+def _body_mass_scale_range_to_alpha_range(
+  body_mass_scale_range: tuple[float, float],
+) -> tuple[float, float]:
+  """Convert direct mass scale bounds to ``dr.pseudo_inertia`` alpha bounds."""
+  min_scale, max_scale = body_mass_scale_range
+  if min_scale <= 0.0 or max_scale <= 0.0:
+    raise ValueError("body_mass_scale_range values must be positive.")
+  if min_scale > max_scale:
+    raise ValueError("body_mass_scale_range min must be <= max.")
+
+  # pseudo_inertia scales mass and inertia by exp(2 * alpha).
+  return (0.5 * math.log(min_scale), 0.5 * math.log(max_scale))
 
 
 def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
@@ -70,7 +85,7 @@ def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
     ),
     "phase": ObservationTermCfg(
       func=velocity_mdp.phase,
-      params={"period": 0.6, "command_name": "twist"},
+      params={"period": 0.8, "command_name": "twist"},
     ),
     "joint_pos": ObservationTermCfg(
       func=velocity_mdp.joint_pos_rel,
@@ -163,7 +178,7 @@ def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
       func=envs_mdp.reset_joints_by_offset,
       mode="reset",
       params={
-        "position_range": (0.0, 0.0),
+        "position_range": (-0.03, 0.03),
         "velocity_range": (0.0, 0.0),
         "asset_cfg": SceneEntityCfg("robot", joint_names=(".*",)),
       },
@@ -198,7 +213,7 @@ def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
       func=dr.encoder_bias,
       params={
         "asset_cfg": SceneEntityCfg("robot"),
-        "bias_range": (-0.015, 0.015),
+        "bias_range": (-0.02, 0.02),
       },
     ),
     "base_com": EventTermCfg(
@@ -219,7 +234,7 @@ def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
   rewards = {
     "track_linear_velocity": RewardTermCfg(
       func=mdp.track_linear_velocity,
-      weight=1.0,
+      weight=1.2,
       params={"command_name": "twist", "std": math.sqrt(0.25)},
     ),
     "track_angular_velocity": RewardTermCfg(
@@ -266,7 +281,7 @@ def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
       func=velocity_mdp.feet_gait,
       weight=0.5,
       params={
-        "period": 0.6,
+        "period": 0.8,
         "offset": [0.0, 0.5],
         "threshold": 0.56,
         "command_threshold": 0.1,
@@ -278,7 +293,7 @@ def _make_reference_velocity_env_cfg() -> ManagerBasedRlEnvCfg:
       func=mdp.feet_clearance,
       weight=-1.0,
       params={
-        "target_height": 0.10,
+        "target_height": 0.15,
         "command_name": "twist",
         "command_threshold": 0.1,
         "asset_cfg": SceneEntityCfg("robot", site_names=_FOOT_SITE_NAMES),
@@ -406,6 +421,8 @@ def _customize_lowbodynormal_cfg(
   cfg: ManagerBasedRlEnvCfg,
   *,
   play: bool,
+  randomize_body_mass: bool,
+  body_mass_scale_range: tuple[float, float],
 ) -> ManagerBasedRlEnvCfg:
   cfg.sim.mujoco.ccd_iterations = 500
   cfg.sim.contact_sensor_maxmatch = 500
@@ -462,14 +479,25 @@ def _customize_lowbodynormal_cfg(
     "asset_cfg"
   ].geom_names = JLJLOWBODY_CAPSULE_FOOT_COLLISION_NAMES
   cfg.events["base_com"].params["asset_cfg"].body_names = (_BASE_BODY_NAME,)
+  if randomize_body_mass:
+    base_com_event = cfg.events.pop("base_com")
+    cfg.events["link_pseudo_inertia"] = EventTermCfg(
+      mode="startup",
+      func=dr.pseudo_inertia,
+      params={
+        "asset_cfg": SceneEntityCfg("robot", body_names=(".*",)),
+        "alpha_range": _body_mass_scale_range_to_alpha_range(body_mass_scale_range),
+      },
+    )
+    cfg.events["base_com"] = base_com_event
 
   cfg.rewards["pose"].params["std_standing"] = {".*": 0.05}
   cfg.rewards["pose"].params["std_walking"] = {
-    r".*hip_pitch.*": 0.3,
+    r".*hip_pitch.*": 0.5,
     r".*hip_roll.*": 0.15,
     r".*hip_yaw.*": 0.15,
-    r".*knee.*": 0.35,
-    r".*ankle_pitch.*": 0.25,
+    r".*knee.*": 0.5,
+    r".*ankle_pitch.*": 0.20,
     r".*ankle_roll.*": 0.1,
   }
   cfg.rewards["pose"].params["std_running"] = {
@@ -477,7 +505,7 @@ def _customize_lowbodynormal_cfg(
     r".*hip_roll.*": 0.2,
     r".*hip_yaw.*": 0.2,
     r".*knee.*": 0.6,
-    r".*ankle_pitch.*": 0.35,
+    r".*ankle_pitch.*": 0.25,
     r".*ankle_roll.*": 0.15,
   }
 
@@ -513,11 +541,17 @@ def _customize_lowbodynormal_cfg(
   return cfg
 
 
-def lowbodynormal_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
+def lowbodynormal_flat_env_cfg(
+  play: bool = False,
+  randomize_body_mass: bool = False,
+  body_mass_scale_range: tuple[float, float] = LOWBODYNORMAL_BODY_MASS_SCALE_RANGE,
+) -> ManagerBasedRlEnvCfg:
   """Create the LowBodyNormal flat terrain velocity configuration."""
   cfg = _customize_lowbodynormal_cfg(
     _make_reference_velocity_env_cfg(),
     play=play,
+    randomize_body_mass=randomize_body_mass,
+    body_mass_scale_range=body_mass_scale_range,
   )
 
   cfg.sim.njmax = 300
