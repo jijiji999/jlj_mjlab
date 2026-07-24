@@ -20,9 +20,9 @@ JLJLOWBODY_XML: Path = (
   MJLAB_SRC_PATH / "asset_zoo" / "robots" / "jljbot" / "xml" / "lowbody.xml"
 )
 JLJLOWBODY_CAPSULE_XML: Path = (
-  MJLAB_SRC_PATH / "asset_zoo" / "robots" / "jljbot" / "xml" / "lowbodycapsulev2.xml"
+  MJLAB_SRC_PATH / "asset_zoo" / "robots" / "jljbot" / "xml" / "lowbodycapsulev3.xml"
 )
-JLJLOWBODY_ASSET_DIR = JLJLOWBODY_XML.parent / "lowbodycapsulev2_assets"
+JLJLOWBODY_ASSET_DIR = JLJLOWBODY_XML.parent / "lowbodycapsulev3_assets"
 assert JLJLOWBODY_XML.exists()
 assert JLJLOWBODY_CAPSULE_XML.exists()
 assert JLJLOWBODY_ASSET_DIR.exists()
@@ -91,7 +91,7 @@ def _make_jljlowbody_actuator(
 
 JLJLOWBODY_ACTUATOR_LEFT_HIP_PITCH = _make_jljlowbody_actuator(
   "left_hip_pitch_joint",
-  stiffness=150.0,  # 180
+  stiffness=100.0,  # 180
   damping=4.0,  # 10
   effort_limit=80.0,  # 45
   armature=0.055,
@@ -99,7 +99,7 @@ JLJLOWBODY_ACTUATOR_LEFT_HIP_PITCH = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_HIP_ROLL = _make_jljlowbody_actuator(
   "left_hip_roll_joint",
-  stiffness=100.0,  # 80
+  stiffness=80.0,  # 80
   damping=5.0,
   effort_limit=45.0,
   armature=0.055,
@@ -107,7 +107,7 @@ JLJLOWBODY_ACTUATOR_LEFT_HIP_ROLL = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_HIP_YAW = _make_jljlowbody_actuator(
   "left_hip_yaw_joint",
-  stiffness=100.0,  # 140
+  stiffness=80.0,  # 140
   damping=3.0,
   effort_limit=45.0,
   armature=0.055,
@@ -115,7 +115,7 @@ JLJLOWBODY_ACTUATOR_LEFT_HIP_YAW = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_KNEE = _make_jljlowbody_actuator(
   "left_knee_joint",
-  stiffness=150.0,  # 300
+  stiffness=130.0,  # 300
   damping=4.5,
   effort_limit=80.0,
   armature=0.055,
@@ -123,23 +123,23 @@ JLJLOWBODY_ACTUATOR_LEFT_KNEE = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_LEFT_ANKLE_PITCH = _make_jljlowbody_actuator(
   "left_ankle_pitch_joint",
-  stiffness=20.0,  # 150
-  damping=5.0,
+  stiffness=50.0,  # 150
+  damping=3.0,
   effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
 JLJLOWBODY_ACTUATOR_LEFT_ANKLE_ROLL = _make_jljlowbody_actuator(
   "left_ankle_roll_joint",
-  stiffness=20.0,  # 150
-  damping=5.0,
+  stiffness=50.0,  # 150
+  damping=3.0,
   effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
 JLJLOWBODY_ACTUATOR_RIGHT_HIP_PITCH = _make_jljlowbody_actuator(
   "right_hip_pitch_joint",
-  stiffness=150.0,  # 180
+  stiffness=100.0,  # 180
   damping=4.0,
   effort_limit=80.0,
   armature=0.055,
@@ -147,7 +147,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_HIP_PITCH = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_HIP_ROLL = _make_jljlowbody_actuator(
   "right_hip_roll_joint",
-  stiffness=100.0,  # 80
+  stiffness=80.0,  # 80
   damping=5.0,
   effort_limit=45.0,
   armature=0.055,
@@ -155,7 +155,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_HIP_ROLL = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_HIP_YAW = _make_jljlowbody_actuator(
   "right_hip_yaw_joint",
-  stiffness=100.0,  # 140
+  stiffness=80.0,  # 140
   damping=3.0,
   effort_limit=45.0,
   armature=0.055,
@@ -163,7 +163,7 @@ JLJLOWBODY_ACTUATOR_RIGHT_HIP_YAW = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_KNEE = _make_jljlowbody_actuator(
   "right_knee_joint",
-  stiffness=150.0,  # 300
+  stiffness=130.0,  # 300
   damping=4.5,
   effort_limit=80.0,
   armature=0.055,
@@ -171,16 +171,16 @@ JLJLOWBODY_ACTUATOR_RIGHT_KNEE = _make_jljlowbody_actuator(
 )
 JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_PITCH = _make_jljlowbody_actuator(
   "right_ankle_pitch_joint",
-  stiffness=20.0,  # 150
-  damping=5.0,
+  stiffness=50.0,  # 150
+  damping=3.0,
   effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,
 )
 JLJLOWBODY_ACTUATOR_RIGHT_ANKLE_ROLL = _make_jljlowbody_actuator(
   "right_ankle_roll_joint",
-  stiffness=20.0,  # 150
-  damping=5.0,
+  stiffness=50.0,  # 150
+  damping=3.0,
   effort_limit=10.0,  # 12
   armature=0.064,  # 0.032
   velocity_limit=4.0,

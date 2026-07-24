@@ -543,7 +543,7 @@ def _customize_lowbodynormal_cfg(
 
 def lowbodynormal_flat_env_cfg(
   play: bool = False,
-  randomize_body_mass: bool = False,
+  randomize_body_mass: bool = True,
   body_mass_scale_range: tuple[float, float] = LOWBODYNORMAL_BODY_MASS_SCALE_RANGE,
 ) -> ManagerBasedRlEnvCfg:
   """Create the LowBodyNormal flat terrain velocity configuration."""
